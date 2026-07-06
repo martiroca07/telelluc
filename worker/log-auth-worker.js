@@ -33,6 +33,14 @@ export default {
             return handleDevices(request, env);
         }
 
+        if (url.pathname === "/command" && request.method === "POST") {
+            return handleCommandQueue(request, env);
+        }
+
+        if (url.pathname === "/command" && request.method === "GET") {
+            return handleCommandDequeue(request, env);
+        }
+
         return new Response("Not found", { status: 404 });
     }
 };
@@ -75,7 +83,7 @@ async function handleHeartbeat(request, env) {
     }
 
     await env.DEVICES_KV.put(key, JSON.stringify(record));
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ ok: true, id: record.id }), {
         headers: { "content-type": "application/json" }
     });
 }
@@ -110,6 +118,60 @@ async function handleDevices(request, env) {
     devices.sort((a, b) => a.id - b.id);
 
     return new Response(JSON.stringify({ devices }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleCommandQueue(request, env) {
+    if (!checkBearer(request, env.INTERNAL_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        return new Response("Bad Request", { status: 400 });
+    }
+
+    const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    const command = body && body.command ? String(body.command) : null;
+    if (!deviceId || !command) {
+        return new Response("Missing deviceId or command", { status: 400 });
+    }
+
+    const key = `command:${deviceId}`;
+    await env.DEVICES_KV.put(key, JSON.stringify({ command, timestamp: Date.now() }), {
+        expirationTtl: 300
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleCommandDequeue(request, env) {
+    if (!checkBearer(request, env.AGENT_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const deviceId = url.searchParams.get("deviceId");
+    if (!deviceId) {
+        return new Response("Missing deviceId", { status: 400 });
+    }
+
+    const key = `command:${deviceId}`;
+    const raw = await env.DEVICES_KV.get(key);
+    if (!raw) {
+        return new Response(JSON.stringify({ command: null }), {
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    await env.DEVICES_KV.delete(key);
+    const cmd = JSON.parse(raw);
+    return new Response(JSON.stringify({ command: cmd.command }), {
         headers: { "content-type": "application/json" }
     });
 }

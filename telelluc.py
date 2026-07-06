@@ -16,6 +16,9 @@ PORT = 5005
 AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
 LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
 HEARTBEAT_INTERVAL_SECONDS = 20
+COMMAND_CHECK_INTERVAL_SECONDS = 5
+
+device_id = None
 
 # ---------------------------------------------------------------------------
 # RUTINAS DE NOTIFICACIÓN Y COMPONENTES DE INTERFAZ
@@ -85,6 +88,7 @@ def show_error():
 # ---------------------------------------------------------------------------
 def heartbeat_loop():
     """Envia de forma periódica el nombre de host para registrar la conexión en el backend."""
+    global device_id
     hostname = socket.gethostname()
     payload = json.dumps({"hostname": hostname}).encode("utf-8")
     while True:
@@ -98,10 +102,35 @@ def heartbeat_loop():
                 },
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=10).read()
+            resp = urllib.request.urlopen(req, timeout=10).read()
+            data = json.loads(resp.decode("utf-8"))
+            device_id = data.get("id")
         except Exception:
             pass
         time.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
+
+def command_check_loop():
+    """Consulta periódicamente si hay comandos pendientes (como 'crash')."""
+    global device_id
+    while True:
+        if device_id is None:
+            time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
+            continue
+        try:
+            req = urllib.request.Request(
+                LOG_AUTH_URL + f"/command?deviceId={device_id}",
+                headers={"Authorization": "Bearer " + AGENT_TOKEN},
+                method="GET",
+            )
+            resp = urllib.request.urlopen(req, timeout=10).read()
+            data = json.loads(resp.decode("utf-8"))
+            cmd = data.get("command")
+            if cmd == "crash":
+                threading.Thread(target=show_error, daemon=True).start()
+        except Exception:
+            pass
+        time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
 
 
 # ---------------------------------------------------------------------------
@@ -134,10 +163,13 @@ if __name__ == "__main__":
     # Inicia el hilo persistente de reporte al backend central
     threading.Thread(target=heartbeat_loop, daemon=True).start()
 
+    # Inicia el hilo que consulta comandos pendientes (crash, etc)
+    threading.Thread(target=command_check_loop, daemon=True).start()
+
     # Servidor local para peticiones de control de interfaz
     server = HTTPServer(("127.0.0.1", PORT), Handler)
     print(f"[*] Agente escuchando peticiones de interfaz en http://127.0.0.1:{PORT} ...", flush=True)
-    
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

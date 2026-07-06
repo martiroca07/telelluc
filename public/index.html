@@ -236,16 +236,16 @@
                 welcome: 'Welcome. Type "help" to see the available commands.',
                 helpHeader: 'Available commands:',
                 helpLines: [
-                    'help          show this help',
-                    'echo [text]   repeat the text',
-                    'date          show the current date and time',
-                    'whoami        show the current user',
-                    'clear / cls   clear the screen',
-                    'showbanner    toggle the rainbow "telelluc" text (top-right)',
-                    'language      switch the interface language (English/Español)',
-                    'crash         trigger the local telelluc.py error popup',
-                    'devices       list telelluc.py machines that have checked in',
-                    'logout        end the session'
+                    'help              show this help',
+                    'echo [text]       repeat the text',
+                    'date              show the current date and time',
+                    'whoami            show the current user',
+                    'clear / cls       clear the screen',
+                    'showbanner        toggle the rainbow "telelluc" text (top-right)',
+                    'language          switch the interface language (English/Español)',
+                    'crash <deviceId>  trigger error popup on a device (see "devices")',
+                    'devices           list telelluc.py machines that have checked in',
+                    'logout            end the session'
                 ],
                 notFound: (cmd) => `command not found: ${cmd}`,
                 tryHelp: 'type "help" to see the available commands',
@@ -258,16 +258,16 @@
                 welcome: 'Bienvenido. Escribí "help" para ver los comandos disponibles.',
                 helpHeader: 'Comandos disponibles:',
                 helpLines: [
-                    'help          muestra esta ayuda',
-                    'echo [texto]  repite el texto',
-                    'date          muestra la fecha y hora actual',
-                    'whoami        muestra el usuario actual',
-                    'clear / cls   limpia la pantalla',
-                    'showbanner    activa/desactiva el texto "telelluc" (arcoíris, arriba a la derecha)',
-                    'language      cambia el idioma de la interfaz (English/Español)',
-                    'crash         dispara el error emergente de telelluc.py',
-                    'devices       lista las máquinas de telelluc.py que se registraron',
-                    'logout        cierra la sesión'
+                    'help              muestra esta ayuda',
+                    'echo [texto]      repite el texto',
+                    'date              muestra la fecha y hora actual',
+                    'whoami            muestra el usuario actual',
+                    'clear / cls       limpia la pantalla',
+                    'showbanner        activa/desactiva el texto "telelluc" (arcoíris, arriba a la derecha)',
+                    'language          cambia el idioma de la interfaz (English/Español)',
+                    'crash <deviceId>  dispara error en una máquina (ver "devices")',
+                    'devices           lista las máquinas de telelluc.py que se registraron',
+                    'logout            cierra la sesión'
                 ],
                 notFound: (cmd) => `comando no encontrado: ${cmd}`,
                 tryHelp: 'escribí "help" para ver los comandos disponibles',
@@ -327,8 +327,24 @@
                 lang = lang === 'en' ? 'es' : 'en';
                 print(t().langSwitched, 'dim');
             },
-            crash() {
-                fetch('http://127.0.0.1:5005/crash').catch(() => {
+            crash(args) {
+                if (args.length === 0) {
+                    print('Usage: crash <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/crash', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId })
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print(t().crashFailed, 'error');
+                        return;
+                    }
+                    print('Crash command sent.', 'dim');
+                }).catch(() => {
                     print(t().crashFailed, 'error');
                 });
             },

@@ -46,6 +46,10 @@ export default {
             return handleDevicesProxy(request, env);
         }
 
+        if (url.pathname === "/api/crash" && request.method === "POST") {
+            return handleCrashCommand(request, env);
+        }
+
         const authed = await isAuthenticated(request, env);
         if (!authed) {
             return new Response(LOGIN_HTML, {
@@ -68,6 +72,45 @@ async function handleDevicesProxy(request, env) {
 
     const upstream = await fetch(`${LOG_AUTH_URL}/devices`, {
         headers: { Authorization: `Bearer ${env.INTERNAL_TOKEN}` }
+    });
+
+    return new Response(await upstream.text(), {
+        status: upstream.status,
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleCrashCommand(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        body = {};
+    }
+
+    const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    if (!deviceId) {
+        return new Response(JSON.stringify({ error: "missing deviceId" }), {
+            status: 400,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const upstream = await fetch(`${LOG_AUTH_URL}/command`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ deviceId, command: "crash" })
     });
 
     return new Response(await upstream.text(), {
