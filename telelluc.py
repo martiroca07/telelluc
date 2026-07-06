@@ -97,8 +97,9 @@ def heartbeat_loop():
             resp = urllib.request.urlopen(req, timeout=10).read()
             data = json.loads(resp.decode("utf-8"))
             device_id = data.get("id")
-        except Exception:
-            pass
+            print(f"[heartbeat] OK - registrado como device {device_id} (hostname: {hostname})", flush=True)
+        except Exception as e:
+            print(f"[heartbeat] ERROR: {e}", flush=True)
         time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 
@@ -118,9 +119,10 @@ def command_check_loop():
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
             if cmd == "crash":
+                print(f"[command] Recibido 'crash' para device {device_id}", flush=True)
                 threading.Thread(target=show_error, daemon=True).start()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[command] ERROR: {e}", flush=True)
         time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
 
 
