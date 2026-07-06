@@ -5,3 +5,7 @@ compatibility_date = "2026-07-06"
 [[kv_namespaces]]
 binding = "DEVICES_KV"
 id = "518aee029205482a883bf34bd73d7ac5"
+
+[vars]
+AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
+INTERNAL_TOKEN = "74934129273152318d2d6d06c7528c2b00064333fd34856a"
