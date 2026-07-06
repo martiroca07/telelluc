@@ -1,0 +1,7 @@
+name = "telelluc-log-auth"
+main = "worker/log-auth-worker.js"
+compatibility_date = "2026-07-06"
+
+[[kv_namespaces]]
+binding = "DEVICES_KV"
+id = "518aee029205482a883bf34bd73d7ac5"
