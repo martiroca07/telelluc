@@ -7,15 +7,18 @@
 //
 // Required secrets (set via Cloudflare dashboard -> Settings -> Variables
 // and Secrets, as "Encrypted"):
-//   AUTH_USER   - the login username
-//   AUTH_PASS   - the login password
-//   AUTH_SECRET - random long string used to sign session cookies
+//   AUTH_USER      - the login username
+//   AUTH_PASS      - the login password
+//   AUTH_SECRET    - random long string used to sign session cookies
+//   INTERNAL_TOKEN - shared secret used to call telelluc-log-auth's
+//                    /devices endpoint (must match the value set there)
 //
 // None of those values are stored in this file, so it's safe to commit
 // this script to a public repo.
 
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev";
 
 export default {
     async fetch(request, env) {
@@ -35,12 +38,35 @@ export default {
             });
         }
 
+        if (url.pathname === "/api/devices" && request.method === "GET") {
+            return handleDevicesProxy(request, env);
+        }
+
         const authed = await isAuthenticated(request, env);
         return new Response(authed ? APP_HTML : LOGIN_HTML, {
             headers: { "content-type": "text/html; charset=UTF-8" }
         });
     }
 };
+
+async function handleDevicesProxy(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const upstream = await fetch(`${LOG_AUTH_URL}/devices`, {
+        headers: { Authorization: `Bearer ${env.INTERNAL_TOKEN}` }
+    });
+
+    return new Response(await upstream.text(), {
+        status: upstream.status,
+        headers: { "content-type": "application/json" }
+    });
+}
 
 async function handleLogin(request, env) {
     let body;
@@ -514,12 +540,15 @@ const APP_HTML = `<!DOCTYPE html>
                     'showbanner    toggle the rainbow "telelluc" text (top-right)',
                     'language      switch the interface language (English/Español)',
                     'crash         trigger the local telelluc.py error popup',
+                    'devices       list telelluc.py machines that have checked in',
                     'logout        end the session'
                 ],
                 notFound: function (cmd) { return 'command not found: ' + cmd; },
                 tryHelp: 'type "help" to see the available commands',
                 langSwitched: 'Language set to English.',
-                crashFailed: 'Could not reach telelluc.py — is it running?'
+                crashFailed: 'Could not reach telelluc.py — is it running?',
+                devicesFailed: 'Could not load device list.',
+                devicesEmpty: 'No devices have checked in yet.'
             },
             es: {
                 welcome: 'Bienvenido. Escribí "help" para ver los comandos disponibles.',
@@ -533,12 +562,15 @@ const APP_HTML = `<!DOCTYPE html>
                     'showbanner    activa/desactiva el texto "telelluc" (arcoíris, arriba a la derecha)',
                     'language      cambia el idioma de la interfaz (English/Español)',
                     'crash         dispara el error emergente de telelluc.py',
+                    'devices       lista las máquinas de telelluc.py que se registraron',
                     'logout        cierra la sesión'
                 ],
                 notFound: function (cmd) { return 'comando no encontrado: ' + cmd; },
                 tryHelp: 'escribí "help" para ver los comandos disponibles',
                 langSwitched: 'Idioma cambiado a Español.',
-                crashFailed: 'No se pudo contactar a telelluc.py — ¿está corriendo?'
+                crashFailed: 'No se pudo contactar a telelluc.py — ¿está corriendo?',
+                devicesFailed: 'No se pudo cargar la lista de dispositivos.',
+                devicesEmpty: 'Todavía no se registró ningún dispositivo.'
             }
         };
 
@@ -594,6 +626,55 @@ const APP_HTML = `<!DOCTYPE html>
             crash: function () {
                 fetch('http://127.0.0.1:5005/crash').catch(function () {
                     print(t().crashFailed, 'error');
+                });
+            },
+            devices: function () {
+                fetch('/api/devices').then(function (resp) {
+                    if (!resp.ok) {
+                        print(t().devicesFailed, 'error');
+                        return null;
+                    }
+                    return resp.json();
+                }).then(function (data) {
+                    if (!data) return;
+                    if (!data.devices || data.devices.length === 0) {
+                        print(t().devicesEmpty, 'dim');
+                        return;
+                    }
+                    var rows = data.devices.map(function (d) {
+                        return {
+                            id: '#' + d.id,
+                            hostname: d.hostname,
+                            status: d.online ? 'online' : 'offline',
+                            lastSeen: new Date(d.lastSeen).toLocaleString(),
+                            ip: d.ip
+                        };
+                    });
+                    function colWidth(key, header) {
+                        return rows.reduce(function (max, r) {
+                            return Math.max(max, r[key].length);
+                        }, header.length);
+                    }
+                    function pad(s, w) {
+                        while (s.length < w) s += ' ';
+                        return s;
+                    }
+                    var idW = colWidth('id', 'ID');
+                    var hostW = colWidth('hostname', 'HOSTNAME');
+                    var statusW = colWidth('status', 'STATUS');
+                    var lastW = colWidth('lastSeen', 'LAST SEEN');
+                    print(
+                        pad('ID', idW) + '  ' + pad('HOSTNAME', hostW) + '  ' +
+                        pad('STATUS', statusW) + '  ' + pad('LAST SEEN', lastW) + '  IP'
+                    );
+                    rows.forEach(function (r) {
+                        print(
+                            pad(r.id, idW) + '  ' + pad(r.hostname, hostW) + '  ' +
+                            pad(r.status, statusW) + '  ' + pad(r.lastSeen, lastW) + '  ' + r.ip
+                        );
+                    });
+                }).catch(function () {
+                    print(t().devicesFailed, 'error');
                 });
             },
             logout: function () {

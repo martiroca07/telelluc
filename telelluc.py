@@ -1,12 +1,42 @@
 import ctypes
+import json
 import os
+import socket
 import subprocess
 import tempfile
 import threading
 import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = 5005
+
+# Shared secret so telelluc-log-auth knows this is a genuine agent.
+# Same value on every machine on purpose (that's what makes this script
+# plug-and-play: copy it anywhere and it just registers itself).
+AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
+LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
+HEARTBEAT_INTERVAL_SECONDS = 20
+
+
+def heartbeat_loop():
+    hostname = socket.gethostname()
+    payload = json.dumps({"hostname": hostname}).encode("utf-8")
+    while True:
+        try:
+            req = urllib.request.Request(
+                LOG_AUTH_URL + "/heartbeat",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + AGENT_TOKEN,
+                },
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10).read()
+        except Exception:
+            pass
+        time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -96,6 +126,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    threading.Thread(target=heartbeat_loop, daemon=True).start()
+
     server = HTTPServer(("127.0.0.1", PORT), Handler)
     print(f"Listening on http://127.0.0.1:{PORT} ...", flush=True)
     server.serve_forever()
