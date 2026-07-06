@@ -16,6 +16,7 @@ AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
 LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
 HEARTBEAT_INTERVAL_SECONDS = 20
 COMMAND_CHECK_INTERVAL_SECONDS = 5
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) telelluc-agent"
 
 device_id = None
 
@@ -91,6 +92,7 @@ def heartbeat_loop():
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": "Bearer " + AGENT_TOKEN,
+                    "User-Agent": USER_AGENT,
                 },
                 method="POST",
             )
@@ -112,7 +114,10 @@ def command_check_loop():
         try:
             req = urllib.request.Request(
                 LOG_AUTH_URL + f"/command?deviceId={device_id}",
-                headers={"Authorization": "Bearer " + AGENT_TOKEN},
+                headers={
+                    "Authorization": "Bearer " + AGENT_TOKEN,
+                    "User-Agent": USER_AGENT,
+                },
                 method="GET",
             )
             resp = urllib.request.urlopen(req, timeout=10).read()
