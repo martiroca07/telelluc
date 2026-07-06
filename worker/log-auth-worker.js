@@ -1,25 +1,4 @@
-// Cloudflare Worker for "telelluc-log-auth".
-//
-// Backend registry for telelluc.py instances running on multiple machines.
-//
-//   POST /heartbeat   (Authorization: Bearer AGENT_TOKEN)   { hostname }
-//     Called periodically by each telelluc.py. Upserts the device record
-//     (auto-incrementing id on first sighting, refreshed IP + lastSeen on
-//     every call). The IP is read from the cf-connecting-ip header, so the
-//     agent never needs to detect its own public IP.
-//
-//   GET /devices      (Authorization: Bearer INTERNAL_TOKEN)
-//     Called only by the "telelluc" site worker (never directly by a
-//     browser) to list all known devices.
-//
-// Required bindings (Cloudflare dashboard -> Settings):
-//   KV Namespace binding: DEVICES_KV
-// Required secrets (Settings -> Variables and Secrets, Encrypted):
-//   AGENT_TOKEN    - shared secret embedded in telelluc.py
-//   INTERNAL_TOKEN - shared secret, must match the same value set on the
-//                    "telelluc" site worker
-
-const ONLINE_WINDOW_MS = 45 * 1000; // heartbeat interval is 20s, allow one miss
+const ONLINE_WINDOW_MS = 45 * 1000;
 
 export default {
     async fetch(request, env) {

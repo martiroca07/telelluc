@@ -1,27 +1,5 @@
-// Cloudflare Worker for the "telelluc" site.
-//
-// Real server-side auth gate: unauthenticated visitors are served ONLY
-// the LOGIN_HTML (a plain Debian-tty style login prompt) defined below.
-// The real terminal lives in public/index.html as a normal, editable
-// static file (bound as the ASSETS binding via wrangler.toml) and is
-// only ever handed back once a valid session cookie is presented -
-// `run_worker_first = true` in wrangler.toml makes sure this fetch()
-// runs for every request, so unauthenticated visitors never get the
-// static asset directly.
-//
-// Required secrets (set via Cloudflare dashboard -> Settings -> Variables
-// and Secrets, as "Encrypted"):
-//   AUTH_USER      - the login username
-//   AUTH_PASS      - the login password
-//   AUTH_SECRET    - random long string used to sign session cookies
-//   INTERNAL_TOKEN - shared secret used to call telelluc-log-auth's
-//                    /devices endpoint (must match the value set there)
-//
-// None of those values are stored in this file, so it's safe to commit
-// this script to a public repo.
-
 const SESSION_COOKIE = "session";
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev";
 
 export default {
