@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>terminal</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <pre id="corner-banner"> _       _      _ _
+| |_ ___| | ___| | |_   _  ___
+| __/ _ \ |/ _ \ | | | | |/ __|
+| ||  __/ |  __/ | | |_| | (__
+ \__\___|_|\___|_|_|\__,_|\___| </pre>
+    <div id="terminal">
+        <div id="output-wrap">
+            <div id="output"></div>
+        </div>
+        <div id="bottom-bar">
+            <div id="suggestions"></div>
+            <div class="prompt-line" id="input-bar">
+                <span class="prompt" id="prompt-label"></span>
+                <div id="input-line"><span id="typed"></span><span class="cursor"></span></div>
+            </div>
+        </div>
+    </div>
+    <input id="hidden-input" autocomplete="off" autocapitalize="off" spellcheck="false" />
+
+    <script src="js/script.js"></script>
+</body>
+</html>
