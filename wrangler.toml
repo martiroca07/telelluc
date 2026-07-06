@@ -1,3 +1,6 @@
+# ---------------------------------------------------------------------------
+# CONFIGURACIÓN PRINCIPAL (Para el Panel Web y la Terminal)
+# ---------------------------------------------------------------------------
 name = "telelluc-site"
 main = "worker/site-worker.js"
 compatibility_date = "2026-07-06"
@@ -6,3 +9,21 @@ compatibility_date = "2026-07-06"
 directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
+
+# Vars para site-worker.js (Recuerda añadir AUTH_USER y AUTH_PASS mediante el dashboard)
+[vars]
+INTERNAL_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
+
+---
+
+# ---------------------------------------------------------------------------
+# CONFIGURACIÓN DEL ENTORNO DE BACKEND (Para el Inventario de Dispositivos)
+# ---------------------------------------------------------------------------
+[env.auth-backend]
+name = "telelluc-log-auth"
+main = "worker/log-auth-worker.js"
+compatibility_date = "2026-07-06"
+
+[[env.auth-backend.kv_namespaces]]
+binding = "TELELLUC_KV"
+id = "518aee029205482a883bf34bd73d7ac5"

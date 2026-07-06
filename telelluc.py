@@ -6,12 +6,13 @@ import subprocess
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = 5005
 
-# Token de autenticación compartido con el servidor central
+# Token de autenticación compartido con el servidor de logs/auth
 AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
 LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
 HEARTBEAT_INTERVAL_SECONDS = 20
@@ -80,10 +81,10 @@ def show_error():
 
 
 # ---------------------------------------------------------------------------
-# FUNCIONES DE COMUNICACIÓN CON EL SERVIDOR CENTRAL
+# BUCLE DE INVENTARIO Y LATIDOS (REGISTRO EN EL BACKEND)
 # ---------------------------------------------------------------------------
 def heartbeat_loop():
-    """Envia de forma periodica el nombre de host para registrar la conexion."""
+    """Envia de forma periódica el nombre de host para registrar la conexión en el backend."""
     hostname = socket.gethostname()
     payload = json.dumps({"hostname": hostname}).encode("utf-8")
     while True:
@@ -103,39 +104,6 @@ def heartbeat_loop():
         time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 
-def cmd_devices():
-    """
-    Consulta al backend la lista de dispositivos registrados, obteniendo
-    el ID incremental asignado, el nombre del equipo y la IP publica detectada.
-    """
-    try:
-        req = urllib.request.Request(
-            LOG_AUTH_URL + "/devices",
-            headers={
-                "Authorization": "Bearer " + AGENT_TOKEN,
-            },
-            method="GET",
-        )
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status == 200:
-                data = json.loads(response.read().decode("utf-8"))
-                devices = data.get("devices", [])
-                
-                # Renderizado de la tabla en la consola local
-                print(f"\n{'ID':<6} | {'Nombre del Dispositivo':<25} | {'IP Pública':<15}")
-                print("-" * 55)
-                for dev in devices:
-                    dev_id = dev.get("id", "N/A")
-                    hostname = dev.get("hostname", "Unknown")
-                    public_ip = dev.get("public_ip", "0.0.0.0")
-                    print(f"{dev_id:<6} | {hostname:<25} | {public_ip:<15}")
-                print()
-            else:
-                print(f"[-] Error en el servidor central: Código {response.status}")
-    except Exception as e:
-        print(f"[-] Error al conectar con el servicio de inventario: {e}")
-
-
 # ---------------------------------------------------------------------------
 # SERVIDOR HTTP LOCAL (ENDPOINT CONTROL)
 # ---------------------------------------------------------------------------
@@ -153,27 +121,22 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/crash":
             threading.Thread(target=show_error, daemon=True).start()
             self.send_response(200)
-        elif self.path == "/devices":
-            # Permite activar la consulta de dispositivos mediante una llamada HTTP local
-            threading.Thread(target=cmd_devices, daemon=True).start()
-            self.send_response(200)
         else:
             self.send_response(404)
         self._cors()
         self.end_headers()
 
     def log_message(self, format, *args):
-        # Deshabilita los logs por defecto en la consola para mantenerla limpia
         pass
 
 
 if __name__ == "__main__":
-    # Inicia el bucle de latidos en segundo plano
+    # Inicia el hilo persistente de reporte al backend central
     threading.Thread(target=heartbeat_loop, daemon=True).start()
 
-    # Inicia el servidor local de escucha
+    # Servidor local para peticiones de control de interfaz
     server = HTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Servidor de control activo en http://127.0.0.1:{PORT} ...", flush=True)
+    print(f"[*] Agente escuchando peticiones de interfaz en http://127.0.0.1:{PORT} ...", flush=True)
     
     try:
         server.serve_forever()
