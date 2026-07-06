@@ -9,3 +9,7 @@ run_worker_first = true
 
 [vars]
 INTERNAL_TOKEN = "74934129273152318d2d6d06c7528c2b00064333fd34856a"
+
+[[services]]
+binding = "LOG_AUTH"
+service = "telelluc-log-auth"

@@ -1,6 +1,6 @@
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-const LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev";
+const LOG_AUTH_URL = "https://log-auth";
 
 export default {
     async fetch(request, env) {
@@ -48,7 +48,7 @@ async function handleDevicesProxy(request, env) {
         });
     }
 
-    const upstream = await fetch(`${LOG_AUTH_URL}/devices`, {
+    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/devices`, {
         headers: { Authorization: `Bearer ${env.INTERNAL_TOKEN}` }
     });
 
@@ -82,7 +82,7 @@ async function handleCrashCommand(request, env) {
         });
     }
 
-    const upstream = await fetch(`${LOG_AUTH_URL}/command`, {
+    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/command`, {
         method: "POST",
         headers: {
             Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
