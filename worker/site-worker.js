@@ -79,6 +79,8 @@ async function handleerrorCommand(request, env) {
     }
 
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    const cantidad = body && body.cantidad ? Number(body.cantidad) : 1;
+
     if (!deviceId) {
         return new Response(JSON.stringify({ error: "missing deviceId" }), {
             status: 400,
@@ -92,7 +94,7 @@ async function handleerrorCommand(request, env) {
             Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ deviceId, command: "error" })
+        body: JSON.stringify({ deviceId, command: "error", cantidad })
     });
 
     return new Response(await upstream.text(), {

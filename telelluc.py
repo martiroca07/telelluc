@@ -15,7 +15,7 @@ PORT = 5005
 AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
 LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
 HEARTBEAT_INTERVAL_SECONDS = 20
-COMMAND_CHECK_INTERVAL_SECONDS = 5
+COMMAND_CHECK_INTERVAL_SECONDS = 0
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) telelluc-agent"
 
 device_id = None
@@ -123,9 +123,12 @@ def command_check_loop():
             resp = urllib.request.urlopen(req, timeout=10).read()
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
+            cantidad = data.get("cantidad", 1)
+            
             if cmd == "error":
-                print(f"[command] Recibido 'error' para device {device_id}", flush=True)
-                threading.Thread(target=show_error, daemon=True).start()
+                print(f"[command] Recibido 'error' para device {device_id} (Cantidad: {cantidad})", flush=True)
+                for _ in range(int(cantidad)):
+                    threading.Thread(target=show_error, daemon=True).start()
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)
         time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)

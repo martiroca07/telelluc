@@ -345,15 +345,25 @@
             },
             error(args) {
                 if (args.length === 0) {
-                    print('Usage: error <deviceId>', 'dim');
+                    print('Usage: error <deviceId> [amount]', 'dim');
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
+                
                 const deviceId = args[0];
+                let cantidad = 1;
+                
+                if (args.length >= 2) {
+                    const parsed = parseInt(args[1], 10);
+                    if (!isNaN(parsed) && parsed > 0) {
+                        cantidad = parsed;
+                    }
+                }
+                
                 fetch('/api/error', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId })
+                    body: JSON.stringify({ deviceId, cantidad })
                 }).then((resp) => {
                     if (!resp.ok) {
                         print(t().errorFailed, 'error');
