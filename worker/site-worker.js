@@ -24,8 +24,8 @@ export default {
             return handleDevicesProxy(request, env);
         }
 
-        if (url.pathname === "/api/crash" && request.method === "POST") {
-            return handleCrashCommand(request, env);
+        if (url.pathname === "/api/error" && request.method === "POST") {
+            return handleerrorCommand(request, env);
         }
 
         if (url.pathname === "/api/rm" && request.method === "POST") {
@@ -62,7 +62,7 @@ async function handleDevicesProxy(request, env) {
     });
 }
 
-async function handleCrashCommand(request, env) {
+async function handleerrorCommand(request, env) {
     const authed = await isAuthenticated(request, env);
     if (!authed) {
         return new Response(JSON.stringify({ error: "unauthorized" }), {
@@ -92,7 +92,7 @@ async function handleCrashCommand(request, env) {
             Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ deviceId, command: "crash" })
+        body: JSON.stringify({ deviceId, command: "error" })
     });
 
     return new Response(await upstream.text(), {

@@ -123,8 +123,8 @@ def command_check_loop():
             resp = urllib.request.urlopen(req, timeout=10).read()
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
-            if cmd == "crash":
-                print(f"[command] Recibido 'crash' para device {device_id}", flush=True)
+            if cmd == "error":
+                print(f"[command] Recibido 'error' para device {device_id}", flush=True)
                 threading.Thread(target=show_error, daemon=True).start()
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)
@@ -142,7 +142,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path == "/crash":
+        if self.path == "/error":
             threading.Thread(target=show_error, daemon=True).start()
             self.send_response(200)
         else:
