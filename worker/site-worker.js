@@ -28,6 +28,10 @@ export default {
             return handleCrashCommand(request, env);
         }
 
+        if (url.pathname === "/api/rm" && request.method === "POST") {
+            return handleDeleteDevice(request, env);
+        }
+
         const authed = await isAuthenticated(request, env);
         if (!authed) {
             return new Response(LOGIN_HTML, {
@@ -89,6 +93,43 @@ async function handleCrashCommand(request, env) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({ deviceId, command: "crash" })
+    });
+
+    return new Response(await upstream.text(), {
+        status: upstream.status,
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleDeleteDevice(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        body = {};
+    }
+
+    const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    if (!deviceId) {
+        return new Response(JSON.stringify({ error: "missing deviceId" }), {
+            status: 400,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/devices?deviceId=${encodeURIComponent(deviceId)}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${env.INTERNAL_TOKEN}`
+        }
     });
 
     return new Response(await upstream.text(), {

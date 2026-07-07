@@ -20,6 +20,10 @@ export default {
             return handleCommandDequeue(request, env);
         }
 
+        if (url.pathname === "/devices" && request.method === "DELETE") {
+            return handleDeleteDevice(request, env);
+        }
+
         return new Response("Not found", { status: 404 });
     }
 };
@@ -151,6 +155,42 @@ async function handleCommandDequeue(request, env) {
     await env.DEVICES_KV.delete(key);
     const cmd = JSON.parse(raw);
     return new Response(JSON.stringify({ command: cmd.command }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleDeleteDevice(request, env) {
+    if (!checkBearer(request, env.INTERNAL_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const deviceId = url.searchParams.get("deviceId");
+    if (!deviceId) {
+        return new Response("Missing deviceId", { status: 400 });
+    }
+
+    const list = await env.DEVICES_KV.list({ prefix: "device:" });
+    let found = false;
+    for (const entry of list.keys) {
+        const raw = await env.DEVICES_KV.get(entry.name);
+        if (!raw) continue;
+        const record = JSON.parse(raw);
+        if (String(record.id) === String(deviceId)) {
+            await env.DEVICES_KV.delete(entry.name);
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        return new Response(JSON.stringify({ error: "device not found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
         headers: { "content-type": "application/json" }
     });
 }

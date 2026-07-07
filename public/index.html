@@ -243,6 +243,7 @@
                     'showbanner        toggle the rainbow "telelluc" text (top-right)',
                     'language          switch the interface language (English/Español)',
                     'crash <deviceId>  trigger error popup on a device (see "devices")',
+                    'rm <deviceId>     delete a device from the list',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session'
                 ],
@@ -250,6 +251,7 @@
                 tryHelp: 'type "help" to see the available commands',
                 langSwitched: 'Language set to English.',
                 crashFailed: 'Could not reach telelluc.py — is it running?',
+                rmFailed: 'Could not delete device.',
                 devicesFailed: 'Could not load device list.',
                 devicesEmpty: 'No devices have checked in yet.'
             },
@@ -265,6 +267,7 @@
                     'showbanner        activa/desactiva el texto "telelluc" (arcoíris, arriba a la derecha)',
                     'language          cambia el idioma de la interfaz (English/Español)',
                     'crash <deviceId>  dispara error en una máquina (ver "devices")',
+                    'rm <deviceId>     elimina un dispositivo de la lista',
                     'devices           lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión'
                 ],
@@ -272,6 +275,7 @@
                 tryHelp: 'escribí "help" para ver los comandos disponibles',
                 langSwitched: 'Idioma cambiado a Español.',
                 crashFailed: 'No se pudo contactar a telelluc.py — ¿está corriendo?',
+                rmFailed: 'No se pudo eliminar el dispositivo.',
                 devicesFailed: 'No se pudo cargar la lista de dispositivos.',
                 devicesEmpty: 'Todavía no se registró ningún dispositivo.'
             }
@@ -358,6 +362,27 @@
                     print('Crash command sent.', 'dim');
                 }).catch(() => {
                     print(t().crashFailed, 'error');
+                });
+            },
+            rm(args) {
+                if (args.length === 0) {
+                    print('Usage: rm <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/rm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId })
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print(t().rmFailed, 'error');
+                        return;
+                    }
+                    print('Device deleted.', 'dim');
+                }).catch(() => {
+                    print(t().rmFailed, 'error');
                 });
             },
             devices() {
