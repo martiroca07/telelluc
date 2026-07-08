@@ -159,40 +159,38 @@ def self_delete_agent(trigger_id):
     if not candidates:
         return
 
-    quoted_candidates = []
-    for path in candidates:
-        quoted_candidates.append(repr(os.path.abspath(path)))
+    batch_lines = [
+        "@echo off",
+        "setlocal EnableDelayedExpansion",
+        "set \"parent_pid=%~1\"",
+        "shift",
+        ":loop",
+        "if \"%~1\"==\"\" goto done",
+        "if exist \"%~1\" (",
+        "  set \"target=%~1\"",
+        "  set \"dir=%~dp1\"",
+        "  set \"name=%~nx1\"",
+        "  set \"renamed=!name!.deleted_!random!\"",
+        "  ping -n 3 127.0.0.1 >nul",
+        "  taskkill /F /PID !parent_pid! >nul 2>&1",
+        "  ren \"!target!\" \"!renamed!\" >nul 2>&1",
+        "  if exist \"!dir!!renamed!\" (",
+        "    del /f /q \"!dir!!renamed!\" >nul 2>&1",
+        "  )",
+        ")",
+        "shift",
+        "goto loop",
+        ":done",
+        "exit /b 0",
+    ]
 
-    script = f"""
-$targets = @({','.join(quoted_candidates)});
-Start-Sleep -Seconds 1;
-Stop-Process -Name 'TelellucAgent' -Force -ErrorAction SilentlyContinue;
-Stop-Process -Name 'Windows Agent Service' -Force -ErrorAction SilentlyContinue;
-Start-Sleep -Seconds 1;
-foreach ($target in $targets) {{
-    if (Test-Path $target) {{
-        $parent = Split-Path -Parent $target;
-        $name = Split-Path -Leaf $target;
-        $renamed = Join-Path $parent ($name + '.deleted_' + [System.DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'));
-        try {{
-            Rename-Item -LiteralPath $target -NewName (Split-Path -Leaf $renamed) -Force -ErrorAction Stop
-        }} catch {{}}
-    }}
-}}
-Start-Sleep -Seconds 2;
-foreach ($target in $targets) {{
-    $parent = Split-Path -Parent $target;
-    $name = Split-Path -Leaf $target;
-    $renamed = Join-Path $parent ($name + '.deleted_' + [System.DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'));
-    if (Test-Path $renamed) {{
-        Remove-Item -LiteralPath $renamed -Force -ErrorAction SilentlyContinue
-    }}
-}}
-"""
-
+    tmp_dir = tempfile.gettempdir()
+    batch_path = os.path.join(tmp_dir, f"telelluc_self_delete_{int(time.time())}.bat")
     try:
+        with open(batch_path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(batch_lines) + "\n")
         subprocess.Popen(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            ["cmd", "/c", batch_path, str(os.getpid()), *candidates],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
