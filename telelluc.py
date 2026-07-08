@@ -14,8 +14,8 @@ PORT = 5005
 
 AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
 LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
-HEARTBEAT_INTERVAL_SECONDS = 20
-COMMAND_CHECK_INTERVAL_SECONDS = 0
+HEARTBEAT_INTERVAL_SECONDS = 60
+COMMAND_CHECK_INTERVAL_SECONDS = 5
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) telelluc-agent"
 
 device_id = None
