@@ -244,6 +244,7 @@
                     'language          switch the interface language (English/Español)',
                     'error <deviceId>  trigger error popup on a device (see "devices")',
                     'rm <deviceId>     delete a device from the list',
+                    'self-delete <id>  remove startup copy and local copies of the agent',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session'
                 ],
@@ -268,6 +269,7 @@
                     'language          cambia el idioma de la interfaz (English/Español)',
                     'error <deviceId>  dispara error en una máquina (ver "devices")',
                     'rm <deviceId>     elimina un dispositivo de la lista',
+                    'self-delete <id>  elimina la copia de arranque y las copias locales del agente',
                     'devices           lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión'
                 ],
@@ -393,6 +395,26 @@
                     print('Device deleted.', 'dim');
                 }).catch(() => {
                     print(t().rmFailed, 'error');
+                });
+            },
+            "self-delete"(args) {
+                if (args.length === 0) {
+                    print('Usage: self-delete <id>', 'dim');
+                    return;
+                }
+                const id = args[0];
+                fetch('http://127.0.0.1:5005/self-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print('Self-delete failed.', 'error');
+                        return;
+                    }
+                    print('Self-delete initiated.', 'dim');
+                }).catch(() => {
+                    print('Self-delete failed.', 'error');
                 });
             },
             devices() {

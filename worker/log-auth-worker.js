@@ -1,5 +1,5 @@
 const HEARTBEAT_INTERVAL_SECONDS = 60;
-const ONLINE_WINDOW_MS = HEARTBEAT_INTERVAL_SECONDS * 2 * 1000;
+const ONLINE_WINDOW_MS = HEARTBEAT_INTERVAL_SECONDS * 5 * 1000;
 
 export default {
     async fetch(request, env) {
