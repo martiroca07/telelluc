@@ -123,11 +123,14 @@ def command_check_loop():
             resp = urllib.request.urlopen(req, timeout=10).read()
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
-            cantidad = data.get("cantidad", 1)
-            
+            try:
+                cantidad = max(1, int(data.get("cantidad", 1)))
+            except (TypeError, ValueError):
+                cantidad = 1
+
             if cmd == "error":
                 print(f"[command] Recibido 'error' para device {device_id} (Cantidad: {cantidad})", flush=True)
-                for _ in range(int(cantidad)):
+                for _ in range(cantidad):
                     threading.Thread(target=show_error, daemon=True).start()
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)

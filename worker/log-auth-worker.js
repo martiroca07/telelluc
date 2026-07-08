@@ -119,12 +119,17 @@ async function handleCommandQueue(request, env) {
 
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
     const command = body && body.command ? String(body.command) : null;
+    const cantidadRaw = body && (body.cantidad ?? body.amount ?? body.qty);
+    const cantidad = Number.isFinite(Number(cantidadRaw))
+        ? Math.max(1, Math.floor(Number(cantidadRaw)))
+        : 1;
+
     if (!deviceId || !command) {
         return new Response("Missing deviceId or command", { status: 400 });
     }
 
     const key = `command:${deviceId}`;
-    await env.DEVICES_KV.put(key, JSON.stringify({ command, timestamp: Date.now() }), {
+    await env.DEVICES_KV.put(key, JSON.stringify({ command, cantidad, timestamp: Date.now() }), {
         expirationTtl: 300
     });
 
@@ -154,7 +159,10 @@ async function handleCommandDequeue(request, env) {
 
     await env.DEVICES_KV.delete(key);
     const cmd = JSON.parse(raw);
-    return new Response(JSON.stringify({ command: cmd.command }), {
+    return new Response(JSON.stringify({
+        command: cmd.command,
+        cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1
+    }), {
         headers: { "content-type": "application/json" }
     });
 }
