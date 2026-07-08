@@ -156,24 +156,36 @@ def self_delete_agent(trigger_id):
         if path and os.path.exists(path):
             candidates.append(os.path.abspath(path))
 
-    target_path = candidates[0] if candidates else None
-    if target_path is None:
+    if not candidates:
         return
 
-    target_path_escaped = target_path.replace("'", "''")
+    quoted_candidates = []
+    for path in candidates:
+        quoted_candidates.append(repr(os.path.abspath(path)))
+
     script = f"""
-$target = [System.IO.Path]::GetFullPath('{target_path_escaped}');
+$targets = @({','.join(quoted_candidates)});
 Start-Sleep -Seconds 1;
 Stop-Process -Name 'TelellucAgent' -Force -ErrorAction SilentlyContinue;
 Stop-Process -Name 'Windows Agent Service' -Force -ErrorAction SilentlyContinue;
-Stop-Process -Name 'Windows Agent Service' -Force -ErrorAction SilentlyContinue;
 Start-Sleep -Seconds 1;
-if (Test-Path $target) {{
-    cmd /c "del /f /q \"$target\"" 2>$null
-    cmd /c "ren \"$target\" \"$([System.IO.Path]::GetFileNameWithoutExtension($target))_.tmp\"" 2>$null
-    Start-Sleep -Seconds 1
+foreach ($target in $targets) {{
     if (Test-Path $target) {{
-        cmd /c "powershell -NoProfile -Command \"Remove-Item -LiteralPath '$target' -Force -ErrorAction SilentlyContinue\"" 2>$null
+        $parent = Split-Path -Parent $target;
+        $name = Split-Path -Leaf $target;
+        $renamed = Join-Path $parent ($name + '.deleted_' + [System.DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'));
+        try {{
+            Rename-Item -LiteralPath $target -NewName (Split-Path -Leaf $renamed) -Force -ErrorAction Stop
+        }} catch {{}}
+    }}
+}}
+Start-Sleep -Seconds 2;
+foreach ($target in $targets) {{
+    $parent = Split-Path -Parent $target;
+    $name = Split-Path -Leaf $target;
+    $renamed = Join-Path $parent ($name + '.deleted_' + [System.DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'));
+    if (Test-Path $renamed) {{
+        Remove-Item -LiteralPath $renamed -Force -ErrorAction SilentlyContinue
     }}
 }}
 """
