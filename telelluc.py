@@ -79,6 +79,13 @@ def ensure_startup():
                 shutil.copy2(source_exe, startup_exe)
             elif os.path.getmtime(source_exe) > os.path.getmtime(startup_exe):
                 shutil.copy2(source_exe, startup_exe)
+
+            if os.path.exists(startup_exe) and os.path.exists(source_exe) and os.path.abspath(source_exe) != os.path.abspath(startup_exe):
+                try:
+                    if os.path.getmtime(startup_exe) >= os.path.getmtime(source_exe):
+                        os.remove(source_exe)
+                except OSError:
+                    pass
         except OSError:
             pass
 
