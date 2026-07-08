@@ -1,6 +1,5 @@
 const HEARTBEAT_INTERVAL_SECONDS = 60;
-const ACTIVE_GRACE_PERIOD_MS = 120 * 1000;
-const ONLINE_WINDOW_MS = HEARTBEAT_INTERVAL_SECONDS * 5 * 1000;
+const ONLINE_GRACE_PERIOD_MS = 120 * 1000;
 
 export default {
     async fetch(request, env) {
@@ -93,7 +92,7 @@ async function handleDevices(request, env) {
         if (!raw) continue;
         const record = JSON.parse(raw);
         const ageMs = Date.now() - record.lastSeen;
-        const online = ageMs < ACTIVE_GRACE_PERIOD_MS || ageMs < ONLINE_WINDOW_MS;
+        const online = ageMs < ONLINE_GRACE_PERIOD_MS;
         devices.push({
             id: record.id,
             hostname: record.hostname,
