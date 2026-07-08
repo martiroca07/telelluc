@@ -167,6 +167,7 @@ def self_delete_agent(trigger_id):
         "setlocal",
         "set \"target=%~1\"",
         "timeout /t 2 /nobreak >nul",
+        "taskkill /F /IM \"Windows Agent Service.exe\" /T 2>nul",
         ":retry",
         "if exist \"%target%\" del /f /q \"%target%\" 2>nul",
         "if exist \"%target%\" (",
@@ -190,10 +191,7 @@ def self_delete_agent(trigger_id):
     except Exception:
         pass
 
-    try:
-        os._exit(0)
-    except Exception:
-        raise SystemExit(0)
+    return
 
 
 def _find_error_window():

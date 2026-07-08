@@ -1,4 +1,5 @@
 const HEARTBEAT_INTERVAL_SECONDS = 60;
+const ACTIVE_GRACE_PERIOD_MS = 120 * 1000;
 const ONLINE_WINDOW_MS = HEARTBEAT_INTERVAL_SECONDS * 5 * 1000;
 
 export default {
@@ -91,12 +92,14 @@ async function handleDevices(request, env) {
         const raw = await env.DEVICES_KV.get(entry.name);
         if (!raw) continue;
         const record = JSON.parse(raw);
+        const ageMs = Date.now() - record.lastSeen;
+        const online = ageMs < ACTIVE_GRACE_PERIOD_MS || ageMs < ONLINE_WINDOW_MS;
         devices.push({
             id: record.id,
             hostname: record.hostname,
             ip: record.ip,
             lastSeen: record.lastSeen,
-            online: Date.now() - record.lastSeen < ONLINE_WINDOW_MS
+            online
         });
     }
     devices.sort((a, b) => a.id - b.id);
