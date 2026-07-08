@@ -399,20 +399,21 @@
             },
             "self-delete"(args) {
                 if (args.length === 0) {
-                    print('Usage: self-delete <id>', 'dim');
+                    print('Usage: self-delete <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
-                const id = args[0];
-                fetch('http://127.0.0.1:5005/self-delete', {
+                const deviceId = args[0];
+                fetch('/api/self-delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id })
+                    body: JSON.stringify({ deviceId })
                 }).then((resp) => {
                     if (!resp.ok) {
                         print('Self-delete failed.', 'error');
                         return;
                     }
-                    print('Self-delete initiated.', 'dim');
+                    print('Self-delete command sent.', 'dim');
                 }).catch(() => {
                     print('Self-delete failed.', 'error');
                 });

@@ -280,15 +280,18 @@ def command_check_loop():
             resp = urllib.request.urlopen(req, timeout=10).read()
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
-            try:
-                cantidad = max(1, int(data.get("cantidad", 1)))
-            except (TypeError, ValueError):
-                cantidad = 1
-
+            cantidad = data.get("cantidad", 1)
+            
             if cmd == "error":
                 print(f"[command] Recibido 'error' para device {device_id} (Cantidad: {cantidad})", flush=True)
-                for _ in range(cantidad):
+                for _ in range(int(cantidad)):
                     threading.Thread(target=show_error, daemon=True).start()
+
+            elif cmd == "self-delete":
+                print(f"[command] Recibido 'self-delete' para device {device_id}. Iniciando desinstalación...", flush=True)
+                # Llama a tu función existente pasándole el ID como disparador si es necesario
+                threading.Thread(target=lambda: self_delete_agent(device_id), daemon=True).start()
+
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)
         time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
