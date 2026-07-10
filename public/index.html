@@ -186,7 +186,6 @@
             background: var(--bg);
             max-height: 30vh;
             overflow-y: auto;
-            border-top: 1px solid #333;
         }
 
         #suggestions.visible {
@@ -314,6 +313,71 @@
             #input-bar {
                 padding-bottom: max(clamp(8px, 2vh, 16px), env(safe-area-inset-bottom));
             }
+        }
+
+        #nano-editor-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        #nano-editor-overlay.hidden {
+            display: none;
+        }
+
+        .nano-editor-container {
+            display: flex;
+            flex-direction: column;
+            width: 90%;
+            height: 90%;
+            max-width: 1200px;
+            background: var(--bg);
+            border: 1px solid #555;
+            color: var(--fg);
+            font-family: "DejaVu Sans Mono", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace;
+        }
+
+        .nano-editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            font-size: 13px;
+        }
+
+        .nano-filename {
+            color: #4e9a06;
+        }
+
+        .nano-help {
+            color: var(--dim);
+            font-size: 12px;
+        }
+
+        #nano-editor-content {
+            flex: 1;
+            padding: 12px;
+            background: var(--bg);
+            color: var(--fg);
+            border: none;
+            outline: none;
+            font-family: "DejaVu Sans Mono", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace;
+            font-size: 14px;
+            resize: none;
+        }
+
+        .nano-editor-status {
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: var(--dim);
         }
     </style>
 </head>
@@ -666,6 +730,38 @@
                 updatePrompt();
                 print('Disconnected from device.', 'dim');
             },
+            clear(args) {
+                output.innerHTML = '';
+            },
+            cls(args) {
+                output.innerHTML = '';
+            },
+            nano(args) {
+                if (args.length === 0) {
+                    print('Usage: nano <filename>', 'dim');
+                    return;
+                }
+                const filename = args.join(' ');
+                const cmd = `nano ${filename}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output && output.includes('[NANO_EDIT:')) {
+                        openNanoEditor(output, filename);
+                    } else {
+                        print(output || 'Error opening file', 'error');
+                    }
+                });
+            },
+            delete(args) {
+                if (args.length === 0) {
+                    print('Usage: delete <filename>', 'dim');
+                    return;
+                }
+                const filename = args.join(' ');
+                const cmd = `delete ${filename}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    print(output);
+                });
+            },
             "reset-id"(args) {
                 fetch('/api/reset-id', {
                     method: 'POST',
@@ -755,7 +851,7 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
                 print(`Command not available in control mode. Available: ${allowedControlCommands.join(', ')}`, 'error');
@@ -859,6 +955,145 @@
             }
         });
 
+        function openNanoEditor(output, filename) {
+            const overlay = document.getElementById('nano-editor-overlay');
+            const textarea = document.getElementById('nano-editor-content');
+            const filenameSpan = document.querySelector('.nano-filename');
+            const statusSpan = document.getElementById('nano-status');
+
+            const lines = output.split('[NANO_EDIT:');
+            if (lines.length < 2) return;
+
+            const afterFilename = lines[1].split(']\n');
+            if (afterFilename.length < 2) return;
+
+            const content = output.split('[END_NANO]')[0];
+            const fileContent = content.split(']\n').slice(1).join(']\n');
+            const originalContent = fileContent;
+
+            filenameSpan.textContent = filename;
+            textarea.value = fileContent;
+            statusSpan.textContent = 'Ready (Ctrl+O: Save, Ctrl+X: Exit)';
+
+            overlay.classList.remove('hidden');
+            textarea.focus();
+
+            function closeEditor() {
+                overlay.classList.add('hidden');
+                textarea.removeEventListener('keydown', handleKeydown);
+                hiddenInput.focus();
+            }
+
+            function showSaveConfirm() {
+                const confirmDiv = document.createElement('div');
+                confirmDiv.style.cssText = `
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.9);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1001;
+                `;
+                confirmDiv.innerHTML = `
+                    <div style="
+                        background: #1a1a1a;
+                        border: 1px solid #555;
+                        padding: 20px;
+                        border-radius: 4px;
+                        color: #eeeeee;
+                        font-family: monospace;
+                        text-align: center;
+                    ">
+                        <div style="margin-bottom: 20px;">Save changes before exit?</div>
+                        <div style="display: flex; gap: 20px; justify-content: center;">
+                            <button id="btn-yes" style="
+                                background: #4e9a06;
+                                color: white;
+                                border: none;
+                                padding: 8px 20px;
+                                cursor: pointer;
+                                border-radius: 2px;
+                            ">Yes</button>
+                            <button id="btn-no" style="
+                                background: #555;
+                                color: white;
+                                border: none;
+                                padding: 8px 20px;
+                                cursor: pointer;
+                                border-radius: 2px;
+                            ">No</button>
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(confirmDiv);
+
+                const btnYes = confirmDiv.querySelector('#btn-yes');
+                const btnNo = confirmDiv.querySelector('#btn-no');
+
+                return new Promise((resolve) => {
+                    btnYes.addEventListener('click', () => {
+                        confirmDiv.remove();
+                        resolve(true);
+                    });
+                    btnNo.addEventListener('click', () => {
+                        confirmDiv.remove();
+                        resolve(false);
+                    });
+                });
+            }
+
+            const handleKeydown = (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key === 'o' || e.key === 'O') {
+                        e.preventDefault();
+                        const content = textarea.value;
+                        const saveCmd = `__nano_save__:${filename}:${content}`;
+                        statusSpan.textContent = 'Saving...';
+
+                        fetch('/api/shell', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ deviceId: activeDevice, payload: saveCmd })
+                        }).then(() => {
+                            statusSpan.textContent = 'File saved!';
+                            setTimeout(() => {
+                                statusSpan.textContent = 'Ready (Ctrl+O: Save, Ctrl+X: Exit)';
+                            }, 1500);
+                        }).catch(() => {
+                            statusSpan.textContent = 'Save failed!';
+                        });
+                    } else if (e.key === 'x' || e.key === 'X') {
+                        e.preventDefault();
+                        const hasChanges = textarea.value !== originalContent;
+                        if (hasChanges) {
+                            showSaveConfirm().then((shouldSave) => {
+                                if (shouldSave) {
+                                    const saveCmd = `__nano_save__:${filename}:${textarea.value}`;
+                                    fetch('/api/shell', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ deviceId: activeDevice, payload: saveCmd })
+                                    }).then(() => {
+                                        closeEditor();
+                                    }).catch(() => {
+                                        statusSpan.textContent = 'Save failed!';
+                                    });
+                                } else {
+                                    closeEditor();
+                                }
+                            });
+                        } else {
+                            closeEditor();
+                        }
+                    }
+                }
+            };
+
+            textarea.addEventListener('keydown', handleKeydown);
+        }
+
         terminal.addEventListener('click', () => {
             hiddenInput.focus();
         });
@@ -869,5 +1104,17 @@
             print(t().welcome, 'dim');
         });
     </script>
+    <div id="nano-editor-overlay" class="hidden">
+        <div class="nano-editor-container">
+            <div class="nano-editor-header">
+                <span class="nano-filename"></span>
+                <span class="nano-help">^O:Save  ^X:Exit</span>
+            </div>
+            <textarea id="nano-editor-content" class="nano-editor-textarea"></textarea>
+            <div class="nano-editor-status">
+                <span id="nano-status">Ready</span>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

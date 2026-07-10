@@ -313,13 +313,66 @@ def execute_shell_command(cmd_str):
                     timeout=10,
                     cwd=current_working_dir
                 )
-                return result.stdout.strip() if result.stdout else "Directory is empty"
+                output = result.stdout.strip() if result.stdout else "Directory is empty"
+                lines = output.split("\n")
+                if len(lines) > 110:
+                    more_count = len(lines) - 100
+                    output = "\n".join(lines[:100]) + f"\n... and {more_count} more items"
+                return output
             except Exception as e:
                 return f"Error: {str(e)}"
 
         # Handle pwd command
         if cmd_lower == "pwd" or cmd_lower == "cd":
             return current_working_dir
+
+        # Handle nano command
+        if cmd_lower.startswith("nano "):
+            filename = cmd_str[5:].strip().strip('"').strip("'")
+            try:
+                full_path = os.path.abspath(os.path.join(current_working_dir, filename))
+                if not os.path.exists(full_path):
+                    return f"[NANO_EDIT:{filename}]\n\n[END_NANO]"
+                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                return f"[NANO_EDIT:{filename}]\n{content}\n[END_NANO]"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle nano save command (internal)
+        if cmd_lower.startswith("__nano_save__:"):
+            try:
+                parts = cmd_str.split(":", 2)
+                if len(parts) < 3:
+                    return "Error: Invalid save command"
+                filename = parts[1].strip()
+                content = parts[2]
+                full_path = os.path.abspath(os.path.join(current_working_dir, filename))
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                return f"File saved: {filename}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle delete/rm command
+        if cmd_lower.startswith("delete ") or cmd_lower.startswith("rm "):
+            parts = cmd_str.split(None, 1)
+            if len(parts) < 2:
+                return "Error: delete requires a filename"
+            filename = parts[1].strip().strip('"').strip("'")
+            try:
+                full_path = os.path.abspath(os.path.join(current_working_dir, filename))
+                if not os.path.exists(full_path):
+                    return f"Error: File not found: {filename}"
+                if os.path.isdir(full_path):
+                    import shutil
+                    shutil.rmtree(full_path)
+                    return f"Directory deleted: {filename}"
+                else:
+                    os.remove(full_path)
+                    return f"File deleted: {filename}"
+            except Exception as e:
+                return f"Error: {str(e)}"
 
         # Generic command execution
         try:
