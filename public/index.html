@@ -245,6 +245,7 @@
                     'error <deviceId>  trigger error popup on a device (see "devices")',
                     'rm <deviceId>     delete a device from the list',
                     'self-delete <deviceId>  remove startup copy and local copies of the agent',
+                    'exec <deviceId> <cmd>  execute a shell command on a device',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session'
                 ],
@@ -270,6 +271,7 @@
                     'error <deviceId>  dispara error en una máquina (ver "devices")',
                     'rm <deviceId>     elimina un dispositivo de la lista',
                     'self-delete <deviceId>  elimina la copia de arranque y las copias locales del agente',
+                    'exec <deviceId> <cmd>  ejecuta un comando shell en una máquina',
                     'devices           lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión'
                 ],
@@ -317,6 +319,35 @@
             if (h < 24) return lang === 'es' ? `hace ${h}h` : `${h}h ago`;
             const d = Math.floor(h / 24);
             return lang === 'es' ? `hace ${d}d` : `${d}d ago`;
+        }
+
+        async function waitForResult(deviceId, maxAttempts = 60) {
+            for (let i = 0; i < maxAttempts; i++) {
+                try {
+                    const resp = await fetch('/api/exec-result?deviceId=' + encodeURIComponent(deviceId));
+                    if (!resp.ok) {
+                        await new Promise(r => setTimeout(r, 1000));
+                        continue;
+                    }
+                    const data = await resp.json();
+                    if (data.result) {
+                        print('--- Output ---', 'dim');
+                        if (data.result.output) {
+                            print(data.result.output);
+                        }
+                        if (data.result.error) {
+                            print('--- Error ---', 'error');
+                            print(data.result.error);
+                        }
+                        print('--- End of output ---', 'dim');
+                        return;
+                    }
+                } catch (e) {
+                    // retry
+                }
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            print('Timeout waiting for result.', 'error');
         }
 
         const commands = {
@@ -418,6 +449,33 @@
                     print('Self-delete failed.', 'error');
                 });
             },
+            async exec(args) {
+                if (args.length < 2) {
+                    print('Usage: exec <deviceId> <command>', 'dim');
+                    print('Example: exec 5 whoami', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                const cmdParts = args.slice(1);
+                const payload = cmdParts.join(' ');
+
+                try {
+                    print('Executing on device ' + deviceId + '...', 'dim');
+                    const resp = await fetch('/api/exec', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deviceId, payload })
+                    });
+                    if (!resp.ok) {
+                        print('Command failed.', 'error');
+                        return;
+                    }
+                    print('Command sent. Waiting for result...', 'dim');
+                    await waitForResult(deviceId);
+                } catch (e) {
+                    print('Command execution failed.', 'error');
+                }
+            }
             devices() {
                 fetch('/api/devices').then((resp) => {
                     if (!resp.ok) {
@@ -492,8 +550,13 @@
             if (fn) {
                 fn(args);
             } else {
-                print(t().notFound(cmd), 'error');
-                print(t().tryHelp, 'dim');
+                const firstArgIsNumber = /^\d+$/.test(cmd);
+                if (firstArgIsNumber && args.length > 0) {
+                    commands.exec([cmd, ...args]);
+                } else {
+                    print(t().notFound(cmd), 'error');
+                    print(t().tryHelp, 'dim');
+                }
             }
         }
 

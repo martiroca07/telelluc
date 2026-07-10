@@ -285,6 +285,29 @@ def heartbeat_loop():
         time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 
+def execute_shell_command(cmd_str):
+    try:
+        result = subprocess.run(
+            cmd_str,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        output = result.stdout if result.stdout else ""
+        error = result.stderr if result.stderr else ""
+        return {
+            "success": result.returncode == 0,
+            "output": output,
+            "error": error,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "output": "", "error": "Command timeout (30s)", "returncode": -1}
+    except Exception as e:
+        return {"success": False, "output": "", "error": str(e), "returncode": -1}
+
+
 def command_check_loop():
     global device_id, last_command_time
     while True:
@@ -304,6 +327,7 @@ def command_check_loop():
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
             cantidad = data.get("cantidad", 1)
+            payload = data.get("payload", "")
 
             if cmd and cmd != "none":
                 last_command_time = time.time()
@@ -317,9 +341,39 @@ def command_check_loop():
                 print(f"[command] Recibido 'self-delete' para device {device_id}. Iniciando desinstalación...", flush=True)
                 threading.Thread(target=lambda: self_delete_agent(device_id), daemon=True).start()
 
+            elif cmd == "exec":
+                print(f"[command] Ejecutando comando: {payload}", flush=True)
+                result = execute_shell_command(payload)
+                print(f"[command] Resultado: {json.dumps(result)}", flush=True)
+                try:
+                    send_command_result(device_id, result)
+                except Exception as e:
+                    print(f"[command] Error al enviar resultado: {e}", flush=True)
+
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)
         time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
+
+
+def send_command_result(device_id, result):
+    try:
+        req = urllib.request.Request(
+            LOG_AUTH_URL + "/command-result",
+            data=json.dumps({
+                "deviceId": device_id,
+                "result": result,
+                "timestamp": int(time.time() * 1000)
+            }).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + AGENT_TOKEN,
+                "User-Agent": USER_AGENT,
+            },
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f"[send_result] ERROR: {e}", flush=True)
 
 
 class Handler(BaseHTTPRequestHandler):
