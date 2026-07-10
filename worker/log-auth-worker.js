@@ -177,11 +177,12 @@ async function handleCommandDequeue(request, env) {
         });
     }
 
-    await env.DEVICES_KV.delete(key);
     const cmd = JSON.parse(raw);
+    await env.DEVICES_KV.delete(key);
     return new Response(JSON.stringify({
         command: cmd.command,
-        cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1
+        cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1,
+        payload: cmd.payload || ""
     }), {
         headers: { "content-type": "application/json" }
     });

