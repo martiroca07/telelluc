@@ -550,13 +550,8 @@
             if (fn) {
                 fn(args);
             } else {
-                const firstArgIsNumber = /^\d+$/.test(cmd);
-                if (firstArgIsNumber && args.length > 0) {
-                    commands.exec([cmd, ...args]);
-                } else {
-                    print(t().notFound(cmd), 'error');
-                    print(t().tryHelp, 'dim');
-                }
+                print(t().notFound(cmd), 'error');
+                print(t().tryHelp, 'dim');
             }
         }
 
