@@ -554,7 +554,11 @@
                         print('Self-delete failed.', 'error');
                         return;
                     }
-                    print('Self-delete command sent.', 'dim');
+                    print('Self-delete command sent. Device will be marked offline.', 'dim');
+                    setTimeout(() => {
+                        print('Refreshing device list...', 'dim');
+                        commands.devices([]);
+                    }, 1000);
                 }).catch(() => {
                     print('Self-delete failed.', 'error');
                 });
