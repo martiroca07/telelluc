@@ -1,5 +1,5 @@
 const HEARTBEAT_INTERVAL_SECONDS = 60;
-const ONLINE_GRACE_PERIOD_MS = 120 * 1000;
+const ONLINE_GRACE_PERIOD_MS = 130 * 1000;
 
 export default {
     async fetch(request, env) {

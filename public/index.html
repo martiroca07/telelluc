@@ -435,7 +435,7 @@
                         id: '#' + d.id,
                         hostname: d.hostname,
                         status: d.online ? 'online' : 'offline',
-                        lastSeen: formatLastSeen(d.lastSeen),
+                        lastSeen: d.online ? 'active' : formatLastSeen(d.lastSeen),
                         ip: d.ip
                     }));
                     const colWidth = (key, header) =>

