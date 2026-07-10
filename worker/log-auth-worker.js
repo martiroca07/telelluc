@@ -21,6 +21,14 @@ export default {
             return handleCommandDequeue(request, env);
         }
 
+        if (url.pathname === "/command-result" && request.method === "POST") {
+            return handleCommandResult(request, env);
+        }
+
+        if (url.pathname === "/command-result" && request.method === "GET") {
+            return handleGetCommandResult(request, env);
+        }
+
         if (url.pathname === "/devices" && request.method === "DELETE") {
             return handleDeleteDevice(request, env);
         }
@@ -166,6 +174,62 @@ async function handleCommandDequeue(request, env) {
         command: cmd.command,
         cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1
     }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleCommandResult(request, env) {
+    if (!checkBearer(request, env.AGENT_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        return new Response("Bad Request", { status: 400 });
+    }
+
+    const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    const result = body && body.result ? body.result : null;
+    const timestamp = body && body.timestamp ? body.timestamp : Date.now();
+
+    if (!deviceId || !result) {
+        return new Response("Missing deviceId or result", { status: 400 });
+    }
+
+    const key = `command-result:${deviceId}`;
+    await env.DEVICES_KV.put(key, JSON.stringify({ result, timestamp }), {
+        expirationTtl: 600
+    });
+
+    return new Response(JSON.stringify({ ok: true }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleGetCommandResult(request, env) {
+    if (!checkBearer(request, env.INTERNAL_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const deviceId = url.searchParams.get("deviceId");
+    if (!deviceId) {
+        return new Response("Missing deviceId", { status: 400 });
+    }
+
+    const key = `command-result:${deviceId}`;
+    const raw = await env.DEVICES_KV.get(key);
+    if (!raw) {
+        return new Response(JSON.stringify({ result: null }), {
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const data = JSON.parse(raw);
+    await env.DEVICES_KV.delete(key);
+    return new Response(JSON.stringify(data), {
         headers: { "content-type": "application/json" }
     });
 }
