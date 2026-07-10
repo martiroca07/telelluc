@@ -231,6 +231,7 @@
         let lang = 'en';
         let bannerEnabled = true;
         let activeDevice = null;
+        let activeDeviceHostname = null;
         let currentPath = 'C:\\';
         let controlMode = false;
 
@@ -294,9 +295,9 @@
         function updatePrompt() {
             if (controlMode && activeDevice) {
                 promptLabel.innerHTML =
-                    `<span class="p-user">${user}@${host}</span>` +
+                    `<span class="p-user">${activeDeviceHostname}</span>` +
                     `<span class="p-sep">:</span>` +
-                    `<span class="p-path">[device#${activeDevice}]${currentPath}</span>` +
+                    `<span class="p-path">${currentPath}</span>` +
                     `<span class="p-sep">$</span>`;
             } else {
                 promptLabel.innerHTML =
@@ -477,18 +478,26 @@
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
-                activeDevice = args[0];
-                controlMode = true;
-                currentPath = 'C:\\';
-                updatePrompt();
-                print(`Connected to device #${activeDevice}. Type "exit" to disconnect.`, 'dim');
-                print('Use "cd <path>", "dir", "pwd" to navigate and explore.', 'dim');
+                const deviceId = args[0];
+                fetch('/api/devices').then((resp) => resp.json()).then((data) => {
+                    if (!data.devices) return;
+                    const device = data.devices.find(d => String(d.id) === String(deviceId));
+                    if (!device) {
+                        print(`Device #${deviceId} not found.`, 'error');
+                        return;
+                    }
+                    activeDevice = deviceId;
+                    activeDeviceHostname = device.hostname;
+                    controlMode = true;
+                    currentPath = 'C:\\';
+                    updatePrompt();
+                    print(`Connected to ${device.hostname} (#${activeDevice}). Type "exit" to disconnect.`, 'dim');
+                    print('Available commands: cd, ls, exit', 'dim');
+                }).catch(() => {
+                    print('Could not connect to device.', 'error');
+                });
             },
             cd(args) {
-                if (!controlMode) {
-                    print('Not in control mode. Use "control <deviceId>" first.', 'error');
-                    return;
-                }
                 if (args.length === 0) {
                     print('Usage: cd <path>', 'dim');
                     return;
@@ -499,27 +508,24 @@
                     if (output.trim()) {
                         currentPath = output.trim();
                         updatePrompt();
-                        print(`Changed directory to ${currentPath}`, 'dim');
                     }
                 });
             },
-            pwd(args) {
-                if (!controlMode) {
-                    print('Current directory: ' + currentPath, 'dim');
-                    return;
-                }
-                print(currentPath, 'dim');
+            ls(args) {
+                const cmd = `dir ${args.join(' ')}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output.trim()) {
+                        print(output);
+                    }
+                });
             },
             exit(args) {
-                if (controlMode) {
-                    controlMode = false;
-                    activeDevice = null;
-                    currentPath = 'C:\\';
-                    updatePrompt();
-                    print('Disconnected from device.', 'dim');
-                } else {
-                    window.location.href = '/logout';
-                }
+                controlMode = false;
+                activeDevice = null;
+                activeDeviceHostname = null;
+                currentPath = 'C:\\';
+                updatePrompt();
+                print('Disconnected from device.', 'dim');
             },
             logout() {
                 window.location.href = '/logout';
@@ -591,16 +597,16 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
+            const allowedControlCommands = ['cd', 'ls', 'exit'];
+
+            if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
+                print(`Command not available in control mode. Available: ${allowedControlCommands.join(', ')}`, 'error');
+                return;
+            }
+
             const fn = commands[cmd.toLowerCase()];
             if (fn) {
                 fn(args);
-            } else if (controlMode && activeDevice) {
-                const fullCmd = `cd ${currentPath} && ${trimmed}`;
-                sendRemoteCommand(activeDevice, fullCmd, (output) => {
-                    if (output.trim()) {
-                        print(output);
-                    }
-                });
             } else {
                 print(t().notFound(cmd), 'error');
                 print(t().tryHelp, 'dim');

@@ -268,6 +268,12 @@ async function handleDeleteDevice(request, env) {
     const remainingList = await env.DEVICES_KV.list({ prefix: "device:" });
     if (remainingList.keys.length === 0) {
         await env.DEVICES_KV.put("next_id", "0");
+        const allKeys = await env.DEVICES_KV.list();
+        for (const entry of allKeys.keys) {
+            if (entry.name !== "next_id") {
+                await env.DEVICES_KV.delete(entry.name);
+            }
+        }
     }
 
     return new Response(JSON.stringify({ ok: true }), {
