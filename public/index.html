@@ -503,16 +503,22 @@
                     return;
                 }
                 const path = args.join(' ');
-                const cmd = `cd ${path} && cd`;
+                const cmd = `cd /d "${path}" && echo %cd%`;
                 sendRemoteCommand(activeDevice, cmd, (output) => {
-                    if (output.trim()) {
-                        currentPath = output.trim();
+                    const newPath = output.trim();
+                    if (newPath && !newPath.includes('Error') && !newPath.includes('cannot')) {
+                        currentPath = newPath;
                         updatePrompt();
+                    } else if (newPath.includes('Error') || newPath.includes('cannot')) {
+                        print('Error: ' + newPath, 'error');
                     }
                 });
             },
             ls(args) {
-                const cmd = `dir ${args.join(' ')}`;
+                let cmd = 'dir';
+                if (args.length > 0) {
+                    cmd += ` ${args.join(' ')}`;
+                }
                 sendRemoteCommand(activeDevice, cmd, (output) => {
                     if (output.trim()) {
                         print(output);
@@ -526,6 +532,25 @@
                 currentPath = 'C:\\';
                 updatePrompt();
                 print('Disconnected from device.', 'dim');
+            },
+            "reset-id"(args) {
+                fetch('/api/reset-id', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print('Reset failed.', 'error');
+                        return;
+                    }
+                    return resp.json();
+                }).then((data) => {
+                    if (data && data.message) {
+                        print(data.message, 'dim');
+                        print('Next device to register will have ID #1', 'dim');
+                    }
+                }).catch(() => {
+                    print('Reset failed.', 'error');
+                });
             },
             logout() {
                 window.location.href = '/logout';
@@ -623,7 +648,9 @@
         function computeSuggestions(value) {
             const v = value.toLowerCase();
             if (!v) return [];
-            return commandNames.filter((name) => name.startsWith(v));
+            const allowedControlCommands = ['cd', 'ls', 'exit'];
+            const available = controlMode ? allowedControlCommands : commandNames;
+            return available.filter((name) => name.startsWith(v));
         }
 
         function renderSuggestions() {

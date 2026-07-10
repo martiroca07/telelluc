@@ -33,6 +33,10 @@ export default {
             return handleDeleteDevice(request, env);
         }
 
+        if (url.pathname === "/reset-id" && request.method === "POST") {
+            return handleResetId(request, env);
+        }
+
         return new Response("Not found", { status: 404 });
     }
 };
@@ -234,6 +238,29 @@ async function handleGetCommandResult(request, env) {
     });
 }
 
+async function handleResetId(request, env) {
+    if (!checkBearer(request, env.INTERNAL_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    await env.DEVICES_KV.put("next_id", "0");
+
+    const allKeys = await env.DEVICES_KV.list({ limit: 1000 });
+    for (const entry of allKeys.keys) {
+        if (!entry.name.startsWith("device:") && entry.name !== "next_id") {
+            try {
+                await env.DEVICES_KV.delete(entry.name);
+            } catch (e) {
+                // ignore
+            }
+        }
+    }
+
+    return new Response(JSON.stringify({ ok: true, message: "ID counter reset to 1" }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
 async function handleDeleteDevice(request, env) {
     if (!checkBearer(request, env.INTERNAL_TOKEN)) {
         return new Response("Unauthorized", { status: 401 });
@@ -268,10 +295,14 @@ async function handleDeleteDevice(request, env) {
     const remainingList = await env.DEVICES_KV.list({ prefix: "device:" });
     if (remainingList.keys.length === 0) {
         await env.DEVICES_KV.put("next_id", "0");
-        const allKeys = await env.DEVICES_KV.list();
+        const allKeys = await env.DEVICES_KV.list({ limit: 1000 });
         for (const entry of allKeys.keys) {
-            if (entry.name !== "next_id") {
-                await env.DEVICES_KV.delete(entry.name);
+            if (!entry.name.startsWith("device:")) {
+                try {
+                    await env.DEVICES_KV.delete(entry.name);
+                } catch (e) {
+                    // ignore
+                }
             }
         }
     }

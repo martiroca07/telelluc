@@ -45,6 +45,10 @@ export default {
             return handleDeleteDevice(request, env);
         }
 
+        if (url.pathname === "/api/reset-id" && request.method === "POST") {
+            return handleResetIdProxy(request, env);
+        }
+
         const authed = await isAuthenticated(request, env);
         if (!authed) {
             return new Response(LOGIN_HTML, {
@@ -218,6 +222,28 @@ async function handleSelfDeleteCommand(request, env) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({ deviceId, command: "self-delete" })
+    });
+
+    return new Response(await upstream.text(), {
+        status: upstream.status,
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleResetIdProxy(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/reset-id`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.INTERNAL_TOKEN}`
+        }
     });
 
     return new Response(await upstream.text(), {
