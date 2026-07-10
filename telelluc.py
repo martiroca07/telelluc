@@ -236,16 +236,34 @@ def show_error():
 
 def execute_shell_command(cmd_str):
     try:
-        result = subprocess.run(
-            cmd_str,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        output = result.stdout if result.stdout else ""
-        error = result.stderr if result.stderr else ""
-        return output + error if error else output
+        tmp_dir = tempfile.gettempdir()
+        batch_file = os.path.join(tmp_dir, f"telelluc_cmd_{int(time.time() * 1000)}.bat")
+
+        batch_content = f"""@echo off
+chcp 65001 >nul
+{cmd_str}
+"""
+
+        try:
+            with open(batch_file, "w", encoding="utf-8") as f:
+                f.write(batch_content)
+
+            result = subprocess.run(
+                [batch_file],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+            )
+
+            output = result.stdout.strip() if result.stdout else ""
+            return output if output else "Command executed"
+        finally:
+            try:
+                os.remove(batch_file)
+            except:
+                pass
+
     except subprocess.TimeoutExpired:
         return "Error: Command timeout"
     except Exception as e:
@@ -334,6 +352,22 @@ def command_check_loop():
 
             elif cmd == "self-delete":
                 print(f"[command] Recibido 'self-delete' para device {device_id}. Iniciando desinstalación...", flush=True)
+                try:
+                    hostname = socket.gethostname()
+                    req = urllib.request.Request(
+                        LOG_AUTH_URL + "/mark-offline",
+                        data=json.dumps({"hostname": hostname}).encode("utf-8"),
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + AGENT_TOKEN,
+                            "User-Agent": USER_AGENT,
+                        },
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=5)
+                    print(f"[command] Marcado como offline", flush=True)
+                except Exception as e:
+                    print(f"[command] Error marcando offline: {e}", flush=True)
                 threading.Thread(target=lambda: self_delete_agent(device_id), daemon=True).start()
 
             elif cmd == "shell":

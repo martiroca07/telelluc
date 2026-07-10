@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>telelluc</title>
     <style>
         :root {
             --bg: #000000;
@@ -27,7 +29,19 @@
             background: var(--bg);
             color: var(--fg);
             font-family: "DejaVu Sans Mono", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace;
-            font-size: 15px;
+            font-size: clamp(12px, 2vw, 16px);
+        }
+
+        @media (max-width: 768px) {
+            html, body {
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            html, body {
+                font-size: 13px;
+            }
         }
 
         #terminal {
@@ -72,8 +86,15 @@
             flex: 1;
             min-height: 0;
             overflow-y: auto;
-            padding: 40px 20px 0;
+            padding: clamp(10px, 3vh, 40px) clamp(10px, 3vw, 20px) 0;
             line-height: 1.45;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 768px) {
+            #output-wrap {
+                padding: 20px 12px 0;
+            }
         }
 
         #output-wrap::-webkit-scrollbar {
@@ -101,13 +122,22 @@
         }
 
         #input-bar {
-            padding: 8px 20px 16px;
+            padding: clamp(8px, 2vh, 16px) clamp(12px, 3vw, 20px) clamp(10px, 2vh, 16px);
             line-height: 1.45;
+            min-height: 2.5em;
+        }
+
+        @media (max-width: 768px) {
+            #input-bar {
+                padding: 10px 12px 12px;
+                min-height: 3em;
+            }
         }
 
         .prompt {
             flex-shrink: 0;
-            margin-right: 8px;
+            margin-right: clamp(4px, 1vw, 8px);
+            word-break: break-all;
         }
 
         .p-user {
@@ -138,10 +168,13 @@
             bottom: 100%;
             left: 0;
             right: 0;
-            gap: 6px;
+            gap: clamp(4px, 1vw, 6px);
             flex-wrap: wrap;
-            padding: 6px 20px;
+            padding: clamp(4px, 1vh, 6px) clamp(12px, 3vw, 20px);
             background: var(--bg);
+            max-height: 30vh;
+            overflow-y: auto;
+            border-top: 1px solid #333;
         }
 
         #suggestions.visible {
@@ -151,8 +184,11 @@
         #suggestions .suggestion {
             background: var(--suggest-bg);
             color: var(--fg);
-            padding: 2px 10px;
+            padding: clamp(3px, 1vw, 10px) clamp(6px, 2vw, 12px);
             border-radius: 4px;
+            font-size: 0.95em;
+            cursor: pointer;
+            user-select: none;
         }
 
         #suggestions .suggestion.active {
@@ -160,16 +196,27 @@
             color: #ffffff;
         }
 
+        @media (max-width: 768px) {
+            #suggestions .suggestion {
+                padding: 6px 10px;
+                min-height: 2em;
+                display: flex;
+                align-items: center;
+            }
+        }
+
         #input-line {
             flex: 1;
             position: relative;
-            min-height: 1.3em;
+            min-height: clamp(1.3em, 5vw, 2em);
+            word-break: break-all;
         }
 
         #hidden-input {
             position: absolute;
             opacity: 0;
             pointer-events: none;
+            font-size: 16px;
         }
 
         #typed {
@@ -190,6 +237,74 @@
         @keyframes blink {
             0%, 49% { opacity: 1; }
             50%, 100% { opacity: 0; }
+        }
+
+        @media (max-width: 768px) {
+            #corner-banner {
+                top: 5px;
+                right: 10px;
+                font-size: 8px;
+                line-height: 1;
+            }
+
+            #corner-banner.hidden {
+                display: none;
+            }
+
+            .line {
+                word-break: break-word;
+                overflow-wrap: break-word;
+            }
+
+            .prompt-line {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                gap: 4px;
+            }
+
+            #suggestions {
+                max-height: 40vh;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #corner-banner {
+                font-size: 7px;
+                top: 2px;
+                right: 8px;
+            }
+
+            #output-wrap {
+                padding: 15px 8px 0;
+                font-size: 12px;
+            }
+
+            #input-bar {
+                padding: 8px 8px 10px;
+            }
+
+            .line {
+                font-size: 12px;
+            }
+
+            #suggestions .suggestion {
+                padding: 8px 12px;
+                min-height: 2.5em;
+                font-size: 13px;
+            }
+        }
+
+        @supports (padding: max(0px)) {
+            body {
+                padding-left: max(0px, env(safe-area-inset-left));
+                padding-right: max(0px, env(safe-area-inset-right));
+                padding-bottom: max(0px, env(safe-area-inset-bottom));
+            }
+
+            #input-bar {
+                padding-bottom: max(clamp(8px, 2vh, 16px), env(safe-area-inset-bottom));
+            }
         }
     </style>
 </head>
@@ -505,25 +620,29 @@
                     return;
                 }
                 const path = args.join(' ');
-                const cmd = `cd /d "${path}" && echo %cd%`;
+                const cmd = `cd /d "${path}" & echo %cd%`;
+                print(`Changing to ${path}...`, 'dim');
                 sendRemoteCommand(activeDevice, cmd, (output) => {
-                    const newPath = output.trim();
-                    if (newPath && !newPath.includes('Error') && !newPath.includes('cannot')) {
+                    const newPath = output.trim().split('\n').pop();
+                    if (newPath && !newPath.toLowerCase().includes('error') && !newPath.toLowerCase().includes('cannot')) {
                         currentPath = newPath;
                         updatePrompt();
-                    } else if (newPath.includes('Error') || newPath.includes('cannot')) {
-                        print('Error: ' + newPath, 'error');
+                        print(newPath, 'dim');
+                    } else {
+                        print('Error: Path not found or invalid', 'error');
                     }
                 });
             },
             ls(args) {
-                let cmd = 'dir';
+                let cmd = `cd /d "${currentPath}" & dir`;
                 if (args.length > 0) {
                     cmd += ` ${args.join(' ')}`;
                 }
                 sendRemoteCommand(activeDevice, cmd, (output) => {
-                    if (output.trim()) {
-                        print(output);
+                    if (output && output.trim()) {
+                        print(output.trim());
+                    } else {
+                        print('Directory is empty or cannot be read', 'dim');
                     }
                 });
             },

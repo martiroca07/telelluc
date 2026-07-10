@@ -37,6 +37,10 @@ export default {
             return handleResetId(request, env);
         }
 
+        if (url.pathname === "/mark-offline" && request.method === "POST") {
+            return handleMarkOffline(request, env);
+        }
+
         return new Response("Not found", { status: 404 });
     }
 };
@@ -235,6 +239,36 @@ async function handleGetCommandResult(request, env) {
     const data = JSON.parse(raw);
     await env.DEVICES_KV.delete(key);
     return new Response(JSON.stringify(data), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleMarkOffline(request, env) {
+    if (!checkBearer(request, env.AGENT_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        return new Response("Bad Request", { status: 400 });
+    }
+
+    const hostname = body && body.hostname ? String(body.hostname) : null;
+    if (!hostname) {
+        return new Response("Missing hostname", { status: 400 });
+    }
+
+    const key = `device:${hostname}`;
+    const raw = await env.DEVICES_KV.get(key);
+    if (raw) {
+        const record = JSON.parse(raw);
+        record.lastSeen = Date.now() - (ONLINE_GRACE_PERIOD_MS + 1000);
+        await env.DEVICES_KV.put(key, JSON.stringify(record));
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
         headers: { "content-type": "application/json" }
     });
 }
