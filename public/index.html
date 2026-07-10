@@ -77,6 +77,18 @@
             display: none;
         }
 
+        #version-badge {
+            position: fixed;
+            bottom: 10px;
+            right: 18px;
+            z-index: 10;
+            font-family: "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace;
+            font-size: 10px;
+            color: #999999;
+            pointer-events: none;
+            user-select: none;
+        }
+
         @keyframes rainbow-move {
             0% { background-position: 0% 50%; }
             100% { background-position: 300% 50%; }
@@ -241,14 +253,11 @@
 
         @media (max-width: 768px) {
             #corner-banner {
-                top: 5px;
-                right: 10px;
-                font-size: 8px;
-                line-height: 1;
+                display: none !important;
             }
 
-            #corner-banner.hidden {
-                display: none;
+            #version-badge {
+                display: none !important;
             }
 
             .line {
@@ -314,6 +323,7 @@
 | __/ _ \ |/ _ \ | | | | |/ __|
 | ||  __/ |  __/ | | |_| | (__
  \__\___|_|\___|_|_|\__,_|\___| </pre>
+    <div id="version-badge">v0.0.40</div>
     <div id="terminal">
         <div id="output-wrap">
             <div id="output"></div>
@@ -344,7 +354,8 @@
         const history = [];
         let historyIndex = -1;
         let lang = 'en';
-        let bannerEnabled = true;
+        const isMobile = window.innerWidth < 768;
+        let bannerEnabled = !isMobile;
         let activeDevice = null;
         let activeDeviceHostname = null;
         let currentPath = 'C:\\';
@@ -620,21 +631,18 @@
                     return;
                 }
                 const path = args.join(' ');
-                const cmd = `cd /d "${path}" & echo %cd%`;
-                print(`Changing to ${path}...`, 'dim');
+                const cmd = `cd ${path}`;
                 sendRemoteCommand(activeDevice, cmd, (output) => {
-                    const newPath = output.trim().split('\n').pop();
-                    if (newPath && !newPath.toLowerCase().includes('error') && !newPath.toLowerCase().includes('cannot')) {
-                        currentPath = newPath;
+                    if (output && !output.toLowerCase().includes('error')) {
+                        currentPath = output.trim();
                         updatePrompt();
-                        print(newPath, 'dim');
                     } else {
-                        print('Error: Path not found or invalid', 'error');
+                        print(output || 'Error: Cannot change directory', 'error');
                     }
                 });
             },
             ls(args) {
-                let cmd = `cd /d "${currentPath}" & dir`;
+                let cmd = 'dir';
                 if (args.length > 0) {
                     cmd += ` ${args.join(' ')}`;
                 }
@@ -642,7 +650,7 @@
                     if (output && output.trim()) {
                         print(output.trim());
                     } else {
-                        print('Directory is empty or cannot be read', 'dim');
+                        print('Directory is empty', 'dim');
                     }
                 });
             },
@@ -769,9 +777,11 @@
         function computeSuggestions(value) {
             const v = value.toLowerCase();
             if (!v) return [];
-            const allowedControlCommands = ['cd', 'ls', 'exit'];
-            const available = controlMode ? allowedControlCommands : commandNames;
-            return available.filter((name) => name.startsWith(v));
+            if (controlMode) {
+                const allowedControlCommands = ['cd', 'ls', 'exit'];
+                return allowedControlCommands.filter((name) => name.startsWith(v));
+            }
+            return commandNames.filter((name) => name.startsWith(v) && name !== 'exit');
         }
 
         function renderSuggestions() {

