@@ -134,6 +134,7 @@ async function handleCommandQueue(request, env) {
 
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
     const command = body && body.command ? String(body.command) : null;
+    const payload = body && body.payload ? String(body.payload) : null;
     const cantidadRaw = body && (body.cantidad ?? body.amount ?? body.qty);
     const cantidad = Number.isFinite(Number(cantidadRaw))
         ? Math.max(1, Math.floor(Number(cantidadRaw)))
@@ -144,7 +145,7 @@ async function handleCommandQueue(request, env) {
     }
 
     const key = `command:${deviceId}`;
-    await env.DEVICES_KV.put(key, JSON.stringify({ command, cantidad, timestamp: Date.now() }), {
+    await env.DEVICES_KV.put(key, JSON.stringify({ command, cantidad, payload, timestamp: Date.now() }), {
         expirationTtl: 300
     });
 
