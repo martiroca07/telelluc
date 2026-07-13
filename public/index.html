@@ -460,6 +460,7 @@
                     'control <deviceId>  open interactive control session with a device',
                     'shutdown <deviceId> [seconds]  shutdown a device (optional countdown)',
                     'reboot <deviceId> [seconds]  reboot a device (optional countdown)',
+                    'flip <deviceId>    flip/rotate all displays 90 degrees (reversible)',
                     'reset-id          reset device ID counter to 1',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session',
@@ -506,6 +507,7 @@
                     'control <deviceId>  abre una sesión de control interactiva con un dispositivo',
                     'shutdown <deviceId> [seconds]  apaga un dispositivo (countdown opcional)',
                     'reboot <deviceId> [seconds]  reinicia un dispositivo (countdown opcional)',
+                    'flip <deviceId>    gira todas las pantallas 90 grados (reversible)',
                     'reset-id          reinicia el contador de IDs a 1',
                     'devices           lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión',
@@ -790,6 +792,27 @@
                     print('Reboot command failed.', 'error');
                 });
             },
+            flip(args) {
+                if (args.length === 0) {
+                    print('Usage: flip <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: '__flip__' })
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print('Flip command failed.', 'error');
+                        return;
+                    }
+                    print(`Display rotated on device #${deviceId}.`, 'dim');
+                }).catch(() => {
+                    print('Flip command failed.', 'error');
+                });
+            },
             control(args) {
                 if (args.length === 0) {
                     print('Usage: control <deviceId>', 'dim');
@@ -809,7 +832,7 @@
                     activeDevice = deviceId;
                     activeDeviceHostname = device.hostname;
                     controlMode = true;
-                    currentPath = 'C:\\';
+                    currentPath = 'C:\\Users';
                     updatePrompt();
                     print(`Connected to ${device.hostname} (#${activeDevice}). Type "exit" to disconnect.`, 'dim');
                     print('Available commands: cd, ls, pwd, cat, nano, delete, mkdir, copy, cut, paste, move, start, get, clear, help, exit', 'dim');
@@ -865,7 +888,7 @@
                 controlMode = false;
                 activeDevice = null;
                 activeDeviceHostname = null;
-                currentPath = 'C:\\';
+                currentPath = 'C:\\Users';
                 suggestions = [];
                 renderSuggestions();
                 updatePrompt();

