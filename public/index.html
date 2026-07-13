@@ -477,6 +477,7 @@
                     'paste [path]      paste file (current dir if no path)',
                     'move <src> <dst>  move/rename file',
                     'start <file>      open file or program',
+                    'get <file>        download file to local machine',
                     'clear / cls       clear the screen',
                     'exit              exit control mode'
                 ],
@@ -522,6 +523,7 @@
                     'paste [ruta]      pega archivo (directorio actual si no se especifica)',
                     'move <src> <dst>  mueve/renombra archivo',
                     'start <archivo>   abre archivo o programa',
+                    'get <archivo>     descarga archivo a la máquina local',
                     'clear / cls       limpia la pantalla',
                     'exit              sale del modo control'
                 ],
@@ -803,7 +805,7 @@
                     currentPath = 'C:\\';
                     updatePrompt();
                     print(`Connected to ${device.hostname} (#${activeDevice}). Type "exit" to disconnect.`, 'dim');
-                    print('Available commands: cd, ls, exit', 'dim');
+                    print('Available commands: cd, ls, pwd, cat, nano, delete, mkdir, copy, cut, paste, move, start, get, clear, help, exit', 'dim');
                 }).catch(() => {
                     print('Could not connect to device.', 'error');
                 });
@@ -883,6 +885,7 @@
                     print('paste [path]      paste file (current dir if no path)');
                     print('move <src> <dst>  move/rename file');
                     print('start <file>      open file or program');
+                    print('get <file>        download file to local machine');
                     print('clear / cls       clear the screen');
                     print('help              show this help');
                     print('exit              exit control mode');
@@ -994,6 +997,10 @@
                 commands.move(args);
             },
             start(args) {
+                if (!controlMode) {
+                    print('start command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: start <file|program>', 'dim');
                     return;
@@ -1005,6 +1012,35 @@
                         print(output, 'dim');
                     } else if (output && output.toLowerCase().includes('error')) {
                         print(output, 'error');
+                    }
+                });
+            },
+            get(args) {
+                if (!controlMode) {
+                    print('get command only available in control mode.', 'error');
+                    return;
+                }
+                if (args.length === 0) {
+                    print('Usage: get <filename>', 'dim');
+                    return;
+                }
+                const filename = args.join(' ');
+                const cmd = `get ${filename}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output && output.startsWith('__GET_FILE__:')) {
+                        const parts = output.split(':', 2);
+                        if (parts.length === 2) {
+                            const content = output.substring('__GET_FILE__:'.length);
+                            const link = document.createElement('a');
+                            link.href = 'data:application/octet-stream;base64,' + content;
+                            link.download = filename.split(/[\\/]/).pop();
+                            link.click();
+                            print(`Downloaded: ${link.download}`, 'dim');
+                        }
+                    } else if (output && output.toLowerCase().includes('error')) {
+                        print(output, 'error');
+                    } else {
+                        print(output || 'File download started', 'dim');
                     }
                 });
             },
@@ -1117,10 +1153,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, clear, cls, help, exit`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, clear, cls, help, exit`, 'error');
                 return;
             }
 
@@ -1164,9 +1200,12 @@
                 } else if (cmd === 'delete') {
                     const allItems = [...cache.files, ...cache.folders];
                     return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `delete ${f}`);
-                } else if (cmd === 'copy') {
+                } else if (cmd === 'copy' || cmd === 'cut') {
                     const allItems = [...cache.files, ...cache.folders];
-                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `copy ${f}`);
+                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
+                } else if (cmd === 'get' || cmd === 'cat' || cmd === 'start') {
+                    const allItems = [...cache.files, ...cache.folders];
+                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
                 }
 
                 return [];
