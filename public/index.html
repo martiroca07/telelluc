@@ -468,10 +468,13 @@
                     'cd <path>         change directory',
                     'ls / dir          list directory contents',
                     'pwd               show current directory',
+                    'cat <file>        view file contents',
                     'nano <file>       edit a file',
-                    'delete / rm <file>  delete a file or directory',
+                    'delete <file>     delete a file or directory',
+                    'mkdir <path>      create directory',
                     'copy <file>       copy file to clipboard',
                     'paste [name]      paste file from clipboard',
+                    'move <src> <dst>  move/rename file',
                     'clear / cls       clear the screen',
                     'exit              exit control mode'
                 ],
@@ -599,31 +602,25 @@
             },
             error(args) {
                 if (args.length === 0) {
-                    print('Usage: error <deviceId> [amount]', 'dim');
+                    print('Usage: error <deviceId> [custom message]', 'dim');
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
-                
+
                 const deviceId = args[0];
-                let cantidad = 1;
-                
-                if (args.length >= 2) {
-                    const parsed = parseInt(args[1], 10);
-                    if (!isNaN(parsed) && parsed > 0) {
-                        cantidad = parsed;
-                    }
-                }
-                
-                fetch('/api/error', {
+                const customMessage = args.slice(1).join(' ') || 'Error';
+                const payload = `__error__:${customMessage}`;
+
+                fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, cantidad })
+                    body: JSON.stringify({ deviceId, payload })
                 }).then((resp) => {
                     if (!resp.ok) {
                         print(t().errorFailed, 'error');
                         return;
                     }
-                    print('error command sent.', 'dim');
+                    print('Error popup triggered on device #' + deviceId + '.', 'dim');
                 }).catch(() => {
                     print(t().errorFailed, 'error');
                 });
@@ -851,10 +848,13 @@
                     print('cd <path>         change directory');
                     print('ls / dir          list directory contents');
                     print('pwd               show current directory');
+                    print('cat <file>        view file contents');
                     print('nano <file>       edit a file');
                     print('delete <file>     delete a file or directory');
+                    print('mkdir <path>      create directory');
                     print('copy <file>       copy file to clipboard');
                     print('paste [name]      paste file from clipboard');
+                    print('move <src> <dst>  move/rename file');
                     print('clear / cls       clear the screen');
                     print('help              show this help');
                     print('exit              exit control mode');
@@ -913,6 +913,43 @@
                         print(output, 'dim');
                     }
                 });
+            },
+            cat(args) {
+                if (args.length === 0) {
+                    print('Usage: cat <filename>', 'dim');
+                    return;
+                }
+                const filename = args.join(' ');
+                const cmd = `cat ${filename}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output) print(output);
+                });
+            },
+            mkdir(args) {
+                if (args.length === 0) {
+                    print('Usage: mkdir <dirname>', 'dim');
+                    return;
+                }
+                const dirname = args.join(' ');
+                const cmd = `mkdir ${dirname}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output) print(output, 'dim');
+                });
+            },
+            move(args) {
+                if (args.length < 2) {
+                    print('Usage: move <source> <destination>', 'dim');
+                    return;
+                }
+                const source = args[0];
+                const dest = args.slice(1).join(' ');
+                const cmd = `move ${source} ${dest}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output && !output.toLowerCase().includes('volume')) print(output, 'dim');
+                });
+            },
+            mv(args) {
+                commands.move(args);
             },
             "reset-id"(args) {
                 fetch('/api/reset-id', {
@@ -1020,10 +1057,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: cd, ls, pwd, dir, nano, delete, copy, paste, clear, cls, help, exit`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, paste, mkdir, move, clear, cls, help, exit`, 'error');
                 return;
             }
 
