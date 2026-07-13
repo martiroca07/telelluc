@@ -408,15 +408,15 @@ def execute_shell_command(cmd_str):
             try:
                 parts = cmd_str.split(":", 2)
                 if len(parts) < 3:
-                    return "Error: Invalid save command"
+                    return ""
                 filename = parts[1].strip()
                 content = parts[2]
                 full_path = os.path.abspath(os.path.join(current_working_dir, filename))
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                return f"File saved: {filename}"
+                return ""
             except Exception as e:
-                return f"Error: {str(e)}"
+                return ""
 
         # Handle get command (download file)
         if cmd_lower.startswith("get "):

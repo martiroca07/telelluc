@@ -686,10 +686,17 @@
                         return;
                     }
                     print('Self-delete command sent. Device will be marked offline.', 'dim');
-                    setTimeout(() => {
-                        print('Refreshing device list...', 'dim');
-                        commands.devices([]);
-                    }, 1000);
+                    let countdown = 3;
+                    const showCountdown = () => {
+                        if (countdown > 0) {
+                            print(`Refreshing device list in ${countdown}s...`, 'dim');
+                            countdown--;
+                            setTimeout(showCountdown, 1000);
+                        } else {
+                            commands.devices([]);
+                        }
+                    };
+                    showCountdown();
                 }).catch(() => {
                     print('Self-delete failed.', 'error');
                 });
@@ -1417,11 +1424,15 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ deviceId: activeDevice, payload: saveCmd })
-                        }).then(() => {
-                            statusSpan.textContent = 'File saved!';
-                            setTimeout(() => {
-                                statusSpan.textContent = 'Ready (Ctrl+O: Save, Ctrl+X: Exit)';
-                            }, 1500);
+                        }).then((resp) => {
+                            if (resp.ok) {
+                                statusSpan.textContent = 'File saved!';
+                                setTimeout(() => {
+                                    statusSpan.textContent = 'Ready (Ctrl+O: Save, Ctrl+X: Exit)';
+                                }, 1000);
+                            } else {
+                                statusSpan.textContent = 'Save failed!';
+                            }
                         }).catch(() => {
                             statusSpan.textContent = 'Save failed!';
                         });
