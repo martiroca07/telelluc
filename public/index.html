@@ -460,12 +460,10 @@
                     'control <deviceId>  open interactive control session with a device',
                     'shutdown <deviceId> [seconds]  shutdown a device (optional countdown)',
                     'reboot <deviceId> [seconds]  reboot a device (optional countdown)',
-                    'flip <deviceId>    flip/rotate all displays 90 degrees (reversible)',
                     'sysinfo <deviceId> show system information',
                     'disk <deviceId>    show disk space usage',
                     'processes <deviceId>  list running processes',
                     'ipconfig <deviceId>  show network configuration',
-                    'volume <deviceId> <level>  set volume level (0-100)',
                     'reset-id          reset device ID counter to 1',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session',
@@ -787,27 +785,6 @@
                     print('Reboot command failed.', 'error');
                 });
             },
-            flip(args) {
-                if (args.length === 0) {
-                    print('Usage: flip <deviceId>', 'dim');
-                    print('Run "devices" to see available device IDs.', 'dim');
-                    return;
-                }
-                const deviceId = args[0];
-                fetch('/api/shell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: '__flip__' })
-                }).then((resp) => {
-                    if (!resp.ok) {
-                        print('Flip command failed.', 'error');
-                        return;
-                    }
-                    print(`Display rotated on device #${deviceId}.`, 'dim');
-                }).catch(() => {
-                    print('Flip command failed.', 'error');
-                });
-            },
             sysinfo(args) {
                 if (args.length === 0) {
                     print('Usage: sysinfo <deviceId>', 'dim');
@@ -898,29 +875,6 @@
                     }, 500);
                 }).catch(() => {
                     print('Command failed.', 'error');
-                });
-            },
-            volume(args) {
-                if (args.length < 2) {
-                    print('Usage: volume <deviceId> <level 0-100>', 'dim');
-                    print('Run "devices" to see available device IDs.', 'dim');
-                    return;
-                }
-                const deviceId = args[0];
-                const level = args[1];
-                const payload = `volume ${level}`;
-                fetch('/api/shell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload })
-                }).then((resp) => {
-                    if (!resp.ok) {
-                        print('Volume command failed.', 'error');
-                        return;
-                    }
-                    print(`Volume set to ${level}% on device #${deviceId}.`, 'dim');
-                }).catch(() => {
-                    print('Volume command failed.', 'error');
                 });
             },
             control(args) {
