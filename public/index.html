@@ -159,11 +159,18 @@
 
         .p-path {
             color: var(--path-color);
-            font-weight: bold;
+            font-weight: normal;
+            opacity: 0.9;
         }
 
         .p-sep {
-            color: var(--fg);
+            color: var(--dim);
+            font-weight: normal;
+        }
+
+        .prompt.control-mode {
+            opacity: 0.95;
+            font-weight: normal;
         }
 
         .dim {
@@ -175,7 +182,7 @@
         }
 
         #suggestions {
-            display: none;
+            display: none !important;
             position: absolute;
             bottom: 100%;
             left: 0;
@@ -186,10 +193,12 @@
             background: var(--bg);
             max-height: 30vh;
             overflow-y: auto;
+            min-height: 0 !important;
+            height: auto !important;
         }
 
         #suggestions.visible {
-            display: flex;
+            display: flex !important;
         }
 
         #suggestions .suggestion {
@@ -224,10 +233,17 @@
         }
 
         #hidden-input {
-            position: absolute;
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
             opacity: 0;
             pointer-events: none;
             font-size: 16px;
+            width: 0;
+            height: 0;
+            border: none;
+            padding: 0;
+            margin: 0;
         }
 
         #typed {
@@ -442,8 +458,8 @@
                     'rm <deviceId>     delete a device from the list',
                     'self-delete <deviceId>  remove startup copy and local copies of the agent',
                     'control <deviceId>  open interactive control session with a device',
-                    'shutdown <deviceId>  shutdown a device (30 second countdown)',
-                    'reboot <deviceId>  reboot a device (30 second countdown)',
+                    'shutdown <deviceId> [seconds]  shutdown a device (optional countdown)',
+                    'reboot <deviceId> [seconds]  reboot a device (optional countdown)',
                     'reset-id          reset device ID counter to 1',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session',
@@ -482,8 +498,8 @@
                     'rm <deviceId>     elimina un dispositivo de la lista',
                     'self-delete <deviceId>  elimina la copia de arranque y las copias locales del agente',
                     'control <deviceId>  abre una sesión de control interactiva con un dispositivo',
-                    'shutdown <deviceId>  apaga un dispositivo (cuenta regresiva de 30 segundos)',
-                    'reboot <deviceId>  reinicia un dispositivo (cuenta regresiva de 30 segundos)',
+                    'shutdown <deviceId> [seconds]  apaga un dispositivo (countdown opcional)',
+                    'reboot <deviceId> [seconds]  reinicia un dispositivo (countdown opcional)',
                     'reset-id          reinicia el contador de IDs a 1',
                     'devices           lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión',
@@ -515,12 +531,14 @@
 
         function updatePrompt() {
             if (controlMode && activeDevice) {
+                promptLabel.classList.add('control-mode');
                 promptLabel.innerHTML =
                     `<span class="p-user">${activeDeviceHostname}</span>` +
                     `<span class="p-sep">:</span>` +
                     `<span class="p-path">${currentPath}</span>` +
-                    `<span class="p-sep">$</span>`;
+                    `<span class="p-sep">$ </span>`;
             } else {
+                promptLabel.classList.remove('control-mode');
                 promptLabel.innerHTML =
                     `<span class="p-user">${user}@${host}</span>` +
                     `<span class="p-sep">:</span>` +
@@ -699,42 +717,48 @@
             },
             shutdown(args) {
                 if (args.length === 0) {
-                    print('Usage: shutdown <deviceId>', 'dim');
+                    print('Usage: shutdown <deviceId> [seconds]', 'dim');
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
                 const deviceId = args[0];
+                const seconds = args[1] ? parseInt(args[1]) : 0;
+                const payload = `__shutdown__:${seconds}`;
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: '__shutdown__' })
+                    body: JSON.stringify({ deviceId, payload })
                 }).then((resp) => {
                     if (!resp.ok) {
                         print('Shutdown command failed.', 'error');
                         return;
                     }
-                    print(`Shutdown command sent to device #${deviceId}.`, 'dim');
+                    const msg = seconds > 0 ? `Shutdown command sent to device #${deviceId} (${seconds}s countdown).` : `Shutdown command sent to device #${deviceId}.`;
+                    print(msg, 'dim');
                 }).catch(() => {
                     print('Shutdown command failed.', 'error');
                 });
             },
             reboot(args) {
                 if (args.length === 0) {
-                    print('Usage: reboot <deviceId>', 'dim');
+                    print('Usage: reboot <deviceId> [seconds]', 'dim');
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
                 const deviceId = args[0];
+                const seconds = args[1] ? parseInt(args[1]) : 0;
+                const payload = `__reboot__:${seconds}`;
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: '__reboot__' })
+                    body: JSON.stringify({ deviceId, payload })
                 }).then((resp) => {
                     if (!resp.ok) {
                         print('Reboot command failed.', 'error');
                         return;
                     }
-                    print(`Reboot command sent to device #${deviceId}.`, 'dim');
+                    const msg = seconds > 0 ? `Reboot command sent to device #${deviceId} (${seconds}s countdown).` : `Reboot command sent to device #${deviceId}.`;
+                    print(msg, 'dim');
                 }).catch(() => {
                     print('Reboot command failed.', 'error');
                 });
@@ -1072,7 +1096,8 @@
                 hiddenInput.value = '';
                 refreshTyped();
                 suggestions = [];
-                renderSuggestions();
+                suggestionsBar.innerHTML = '';
+                suggestionsBar.classList.remove('visible');
                 runCommand(value);
                 scrollToBottom();
             } else if (e.key === 'Tab') {

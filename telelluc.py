@@ -331,18 +331,28 @@ def execute_shell_command(cmd_str):
         # Handle shutdown command
         if cmd_lower.startswith("__shutdown__"):
             try:
-                subprocess.Popen(["shutdown", "/s", "/t", "30", "/c", "System will shutdown in 30 seconds"],
+                seconds = "0"
+                if ":" in cmd_str:
+                    parts = cmd_str.split(":")
+                    if len(parts) > 1:
+                        seconds = parts[1].strip()
+                subprocess.Popen(["shutdown", "/s", "/t", seconds],
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
-                return "Shutdown initiated (30 seconds)"
+                return f"Shutdown initiated ({seconds}s)" if seconds != "0" else "Shutdown initiated"
             except Exception as e:
                 return f"Error: {str(e)}"
 
         # Handle reboot command
         if cmd_lower.startswith("__reboot__"):
             try:
-                subprocess.Popen(["shutdown", "/r", "/t", "30", "/c", "System will reboot in 30 seconds"],
+                seconds = "0"
+                if ":" in cmd_str:
+                    parts = cmd_str.split(":")
+                    if len(parts) > 1:
+                        seconds = parts[1].strip()
+                subprocess.Popen(["shutdown", "/r", "/t", seconds],
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
-                return "Reboot initiated (30 seconds)"
+                return f"Reboot initiated ({seconds}s)" if seconds != "0" else "Reboot initiated"
             except Exception as e:
                 return f"Error: {str(e)}"
 
