@@ -325,7 +325,10 @@ def execute_shell_command(cmd_str):
                 return f"Error: {str(e)}"
 
         # Handle pwd command
-        if cmd_lower == "pwd" or cmd_lower == "cd":
+        if cmd_lower == "pwd":
+            return current_working_dir
+
+        if cmd_lower == "cd" and len(cmd_str.strip()) == 2:
             return current_working_dir
 
         # Handle shutdown command

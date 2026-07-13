@@ -813,7 +813,16 @@
                 }
                 sendRemoteCommand(activeDevice, cmd, (output) => {
                     if (output && output.trim()) {
-                        print(output.trim());
+                        const lines = output.split('\n');
+                        const dirIndex = lines.findIndex(l => l.includes('Directory of'));
+                        const endIndex = lines.findIndex((l, i) => i > dirIndex && (l.includes('File(s)') || l.includes('Dir(s)')));
+
+                        if (dirIndex >= 0) {
+                            const relevantLines = lines.slice(dirIndex, endIndex >= 0 ? endIndex + 1 : undefined);
+                            print(relevantLines.join('\n').trim());
+                        } else {
+                            print(output.trim());
+                        }
                         parseAndCacheFiles(output, currentPath);
                     } else {
                         print('Directory is empty', 'dim');
@@ -889,7 +898,9 @@
                 const filename = args.join(' ');
                 const cmd = `copy ${filename}`;
                 sendRemoteCommand(activeDevice, cmd, (output) => {
-                    print(output);
+                    if (output && !output.toLowerCase().includes('volume') && !output.toLowerCase().includes('directory')) {
+                        print(output, 'dim');
+                    }
                 });
             },
             paste(args) {
@@ -898,7 +909,9 @@
                     cmd += ` ${args.join(' ')}`;
                 }
                 sendRemoteCommand(activeDevice, cmd, (output) => {
-                    print(output);
+                    if (output && !output.toLowerCase().includes('volume') && !output.toLowerCase().includes('directory')) {
+                        print(output, 'dim');
+                    }
                 });
             },
             "reset-id"(args) {
@@ -959,6 +972,7 @@
                 commandExecuting = false;
                 hiddenInput.disabled = false;
                 hiddenInput.style.opacity = '1';
+                hiddenInput.focus();
                 return;
             }
             try {
@@ -974,6 +988,7 @@
                     commandExecuting = false;
                     hiddenInput.disabled = false;
                     hiddenInput.style.opacity = '1';
+                    hiddenInput.focus();
                 } else {
                     await new Promise(r => setTimeout(r, 200));
                     waitForShellResult(deviceId, callback, attempts + 1);
