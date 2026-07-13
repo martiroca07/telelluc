@@ -746,6 +746,8 @@
                     return;
                 }
                 const deviceId = args[0];
+                suggestions = [];
+                renderSuggestions();
                 fetch('/api/devices').then((resp) => resp.json()).then((data) => {
                     if (!data.devices) return;
                     const device = data.devices.find(d => String(d.id) === String(deviceId));
@@ -799,6 +801,8 @@
                 activeDevice = null;
                 activeDeviceHostname = null;
                 currentPath = 'C:\\';
+                suggestions = [];
+                renderSuggestions();
                 updatePrompt();
                 print('Disconnected from device.', 'dim');
             },
@@ -807,6 +811,25 @@
             },
             cls(args) {
                 output.innerHTML = '';
+            },
+            help(args) {
+                if (controlMode) {
+                    print('Control mode commands:', 'dim');
+                    print('cd <path>         change directory');
+                    print('ls / dir          list directory contents');
+                    print('pwd               show current directory');
+                    print('nano <file>       edit a file');
+                    print('delete <file>     delete a file or directory');
+                    print('copy <file>       copy file to clipboard');
+                    print('paste [name]      paste file from clipboard');
+                    print('clear / cls       clear the screen');
+                    print('help              show this help');
+                    print('exit              exit control mode');
+                } else {
+                    const helpLines = t().helpLines || [];
+                    print(t().helpHeader);
+                    helpLines.forEach(line => print(line));
+                }
             },
             nano(args) {
                 if (args.length === 0) {
@@ -958,10 +981,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'copy', 'paste', 'pwd', 'dir'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: ${allowedControlCommands.join(', ')}`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, dir, nano, delete, copy, paste, clear, cls, help, exit`, 'error');
                 return;
             }
 
@@ -985,7 +1008,7 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'dir', 'copy', 'paste'];
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'paste', 'help'];
 
                 const parts = value.split(/\s+/);
                 const cmd = parts[0].toLowerCase();
@@ -1002,9 +1025,9 @@
                 } else if (cmd === 'nano') {
                     const allItems = [...cache.files, ...cache.folders];
                     return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `nano ${f}`);
-                } else if (cmd === 'delete' || cmd === 'rm') {
+                } else if (cmd === 'delete') {
                     const allItems = [...cache.files, ...cache.folders];
-                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
+                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `delete ${f}`);
                 } else if (cmd === 'copy') {
                     const allItems = [...cache.files, ...cache.folders];
                     return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `copy ${f}`);
