@@ -14,7 +14,7 @@ Types of import:
 IMPORTANT: Do NOT post this list to the issue-tracker. Use it as a basis for
             tracking down the missing module yourself. Thanks!
 
-missing module named posix - imported by posixpath (optional), shutil (conditional), importlib._bootstrap_external (conditional), pathlib._os (optional), os (conditional, optional)
+missing module named posix - imported by os (conditional, optional), posixpath (optional), shutil (conditional), importlib._bootstrap_external (conditional), pathlib._os (optional)
 missing module named resource - imported by posix (top-level)
 missing module named fcntl - imported by pathlib._os (optional), subprocess (optional)
 missing module named grp - imported by shutil (delayed, optional), tarfile (optional), pathlib (optional), subprocess (delayed, conditional, optional)

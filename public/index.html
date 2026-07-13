@@ -403,7 +403,7 @@
 | __/ _ \ |/ _ \ | | | | |/ __|
 | ||  __/ |  __/ | | |_| | (__
  \__\___|_|\___|_|_|\__,_|\___| </pre>
-    <div id="version-badge">v0.0.40</div>
+    <div id="version-badge">v0.0.50</div>
     <div id="terminal">
         <div id="output-wrap">
             <div id="output"></div>
@@ -472,9 +472,11 @@
                     'nano <file>       edit a file',
                     'delete <file>     delete a file or directory',
                     'mkdir <path>      create directory',
-                    'copy <file>       copy file to clipboard',
-                    'paste [name]      paste file from clipboard',
+                    'copy <path>       copy file to clipboard',
+                    'cut <path>        cut file to clipboard (delete after paste)',
+                    'paste [path]      paste file (current dir if no path)',
                     'move <src> <dst>  move/rename file',
+                    'start <file>      open file or program',
                     'clear / cls       clear the screen',
                     'exit              exit control mode'
                 ],
@@ -511,10 +513,15 @@
                     'cd <ruta>         cambia de directorio',
                     'ls / dir          lista el contenido del directorio',
                     'pwd               muestra el directorio actual',
+                    'cat <archivo>     ve el contenido de un archivo',
                     'nano <archivo>    edita un archivo',
-                    'delete / rm <archivo>  elimina un archivo o directorio',
-                    'copy <archivo>    copia archivo al portapapeles',
-                    'paste [nombre]    pega archivo del portapapeles',
+                    'delete <archivo>  elimina un archivo o directorio',
+                    'mkdir <ruta>      crea directorio',
+                    'copy <ruta>       copia archivo al portapapeles',
+                    'cut <ruta>        corta archivo al portapapeles (elimina después de pegar)',
+                    'paste [ruta]      pega archivo (directorio actual si no se especifica)',
+                    'move <src> <dst>  mueve/renombra archivo',
+                    'start <archivo>   abre archivo o programa',
                     'clear / cls       limpia la pantalla',
                     'exit              sale del modo control'
                 ],
@@ -602,14 +609,28 @@
             },
             error(args) {
                 if (args.length === 0) {
-                    print('Usage: error <deviceId> [custom message]', 'dim');
+                    print('Usage: error <deviceId> [cantidad] [message]', 'dim');
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
 
                 const deviceId = args[0];
-                const customMessage = args.slice(1).join(' ') || 'Error';
-                const payload = `__error__:${customMessage}`;
+                let cantidad = 1;
+                let message = 'Error';
+
+                if (args.length >= 2) {
+                    const parsed = parseInt(args[1], 10);
+                    if (!isNaN(parsed) && parsed > 0) {
+                        cantidad = parsed;
+                        if (args.length >= 3) {
+                            message = args.slice(2).join(' ');
+                        }
+                    } else {
+                        message = args.slice(1).join(' ');
+                    }
+                }
+
+                const payload = `__error__:${cantidad}:${message}`;
 
                 fetch('/api/shell', {
                     method: 'POST',
@@ -620,7 +641,7 @@
                         print(t().errorFailed, 'error');
                         return;
                     }
-                    print('Error popup triggered on device #' + deviceId + '.', 'dim');
+                    print(`Error popup(s) triggered on device #${deviceId}.`, 'dim');
                 }).catch(() => {
                     print(t().errorFailed, 'error');
                 });
@@ -796,8 +817,13 @@
                 const cmd = `cd ${path}`;
                 sendRemoteCommand(activeDevice, cmd, (output) => {
                     if (output && !output.toLowerCase().includes('error')) {
-                        currentPath = output.trim();
-                        updatePrompt();
+                        const trimmed = output.trim();
+                        if (trimmed && !trimmed.includes('\n') && trimmed.includes(':')) {
+                            currentPath = trimmed;
+                            updatePrompt();
+                        } else {
+                            print(output || 'Error: Invalid path', 'error');
+                        }
                     } else {
                         print(output || 'Error: Cannot change directory', 'error');
                     }
@@ -852,9 +878,11 @@
                     print('nano <file>       edit a file');
                     print('delete <file>     delete a file or directory');
                     print('mkdir <path>      create directory');
-                    print('copy <file>       copy file to clipboard');
-                    print('paste [name]      paste file from clipboard');
+                    print('copy <path>       copy file to clipboard');
+                    print('cut <path>        cut file (delete after paste)');
+                    print('paste [path]      paste file (current dir if no path)');
                     print('move <src> <dst>  move/rename file');
+                    print('start <file>      open file or program');
                     print('clear / cls       clear the screen');
                     print('help              show this help');
                     print('exit              exit control mode');
@@ -892,11 +920,11 @@
             },
             copy(args) {
                 if (args.length === 0) {
-                    print('Usage: copy <filename>', 'dim');
+                    print('Usage: copy <file or path>', 'dim');
                     return;
                 }
-                const filename = args.join(' ');
-                const cmd = `copy ${filename}`;
+                const source = args.join(' ');
+                const cmd = `copy ${source}`;
                 sendRemoteCommand(activeDevice, cmd, (output) => {
                     if (output && !output.toLowerCase().includes('volume') && !output.toLowerCase().includes('directory')) {
                         print(output, 'dim');
@@ -904,10 +932,24 @@
                 });
             },
             paste(args) {
-                let cmd = 'paste';
+                let destination = '';
                 if (args.length > 0) {
-                    cmd += ` ${args.join(' ')}`;
+                    destination = args.join(' ');
                 }
+                const cmd = destination ? `paste ${destination}` : 'paste';
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output && !output.toLowerCase().includes('volume') && !output.toLowerCase().includes('directory')) {
+                        print(output, 'dim');
+                    }
+                });
+            },
+            cut(args) {
+                if (args.length === 0) {
+                    print('Usage: cut <file or path>', 'dim');
+                    return;
+                }
+                const source = args.join(' ');
+                const cmd = `cut ${source}`;
                 sendRemoteCommand(activeDevice, cmd, (output) => {
                     if (output && !output.toLowerCase().includes('volume') && !output.toLowerCase().includes('directory')) {
                         print(output, 'dim');
@@ -951,6 +993,21 @@
             mv(args) {
                 commands.move(args);
             },
+            start(args) {
+                if (args.length === 0) {
+                    print('Usage: start <file|program>', 'dim');
+                    return;
+                }
+                const target = args.join(' ');
+                const cmd = `start ${target}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    if (output && !output.toLowerCase().includes('volume')) {
+                        print(output, 'dim');
+                    } else if (output && output.toLowerCase().includes('error')) {
+                        print(output, 'error');
+                    }
+                });
+            },
             "reset-id"(args) {
                 fetch('/api/reset-id', {
                     method: 'POST',
@@ -982,6 +1039,7 @@
             commandExecuting = true;
             hiddenInput.disabled = true;
             hiddenInput.style.opacity = '0.5';
+            const cmdTimestamp = Date.now();
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -992,19 +1050,21 @@
                     commandExecuting = false;
                     hiddenInput.disabled = false;
                     hiddenInput.style.opacity = '1';
+                    hiddenInput.focus();
                     return;
                 }
-                waitForShellResult(deviceId, callback);
+                waitForShellResult(deviceId, callback, 0, cmdTimestamp);
             }).catch(() => {
                 print('Command failed.', 'error');
                 commandExecuting = false;
                 hiddenInput.disabled = false;
                 hiddenInput.style.opacity = '1';
+                hiddenInput.focus();
             });
         }
 
-        async function waitForShellResult(deviceId, callback, attempts = 0) {
-            if (attempts > 30) {
+        async function waitForShellResult(deviceId, callback, attempts = 0, cmdTimestamp = 0) {
+            if (attempts > 40) {
                 print('Timeout waiting for response.', 'error');
                 commandExecuting = false;
                 hiddenInput.disabled = false;
@@ -1015,8 +1075,8 @@
             try {
                 const resp = await fetch('/api/shell-result?deviceId=' + encodeURIComponent(deviceId));
                 if (!resp.ok) {
-                    await new Promise(r => setTimeout(r, 200));
-                    waitForShellResult(deviceId, callback, attempts + 1);
+                    await new Promise(r => setTimeout(r, 150));
+                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp);
                     return;
                 }
                 const data = await resp.json();
@@ -1027,12 +1087,12 @@
                     hiddenInput.style.opacity = '1';
                     hiddenInput.focus();
                 } else {
-                    await new Promise(r => setTimeout(r, 200));
-                    waitForShellResult(deviceId, callback, attempts + 1);
+                    await new Promise(r => setTimeout(r, 150));
+                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp);
                 }
             } catch (e) {
-                await new Promise(r => setTimeout(r, 200));
-                waitForShellResult(deviceId, callback, attempts + 1);
+                await new Promise(r => setTimeout(r, 150));
+                waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp);
             }
         }
 
@@ -1057,10 +1117,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, paste, mkdir, move, clear, cls, help, exit`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, clear, cls, help, exit`, 'error');
                 return;
             }
 

