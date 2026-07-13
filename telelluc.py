@@ -418,7 +418,6 @@ def execute_shell_command(cmd_str):
                 if cmd_lower.startswith("paste "):
                     dest_name = cmd_str[6:].strip().strip('"').strip("'")
                 else:
-                    import os.path
                     dest_name = os.path.basename(clipboard_file)
 
                 dest_path = os.path.abspath(os.path.join(current_working_dir, dest_name))
