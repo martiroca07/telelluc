@@ -724,6 +724,7 @@ def auto_compile():
 def heartbeat_loop():
     global device_id, last_command_time, current_heartbeat_interval, current_command_check_interval, current_inactivity_threshold
     hostname = socket.gethostname()
+    prev_heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
     while True:
         try:
             time_since_command = time.time() - last_command_time
@@ -754,9 +755,12 @@ def heartbeat_loop():
             current_command_check_interval = data.get("commandCheck", COMMAND_CHECK_INTERVAL_SECONDS)
             current_inactivity_threshold = data.get("inactivityThreshold", INACTIVITY_THRESHOLD_SECONDS)
             print(f"[heartbeat] OK - device {device_id} ({hostname}) - {status}", flush=True)
+            prev_heartbeat_interval = current_heartbeat_interval
         except Exception as e:
             print(f"[heartbeat] ERROR: {e}", flush=True)
-        time.sleep(current_heartbeat_interval)
+
+        sleep_time = 1 if current_heartbeat_interval != prev_heartbeat_interval else current_heartbeat_interval
+        time.sleep(sleep_time)
 
 
 def command_check_loop():
