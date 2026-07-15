@@ -1251,7 +1251,7 @@
                 }).then(resp => {
                     if (resp.ok) {
                         print(`Device ${deviceId} set to slow mode (5 min heartbeat, 6 min offline threshold)`, 'dim');
-                        loadDevices();
+                        commands.devices();
                     } else {
                         print('Failed to set slow mode', 'error');
                     }
@@ -1270,7 +1270,7 @@
                 }).then(resp => {
                     if (resp.ok) {
                         print(`Device ${deviceId} set to fast mode (normal)`, 'dim');
-                        loadDevices();
+                        commands.devices();
                     } else {
                         print('Failed to set fast mode', 'error');
                     }
