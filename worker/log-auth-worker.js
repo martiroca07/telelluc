@@ -1,4 +1,9 @@
 const HEARTBEAT_INTERVAL_SECONDS = 60;
+const COMMAND_CHECK_INTERVAL_SECONDS = 5;
+const INACTIVITY_THRESHOLD_SECONDS = 130;
+const SLOW_HEARTBEAT_INTERVAL_SECONDS = 300;
+const SLOW_COMMAND_CHECK_INTERVAL_SECONDS = 300;
+const SLOW_INACTIVITY_THRESHOLD_SECONDS = 360;
 const ONLINE_GRACE_PERIOD_MS = 130 * 1000;
 
 export default {
@@ -41,6 +46,10 @@ export default {
             return handleMarkOffline(request, env);
         }
 
+        if (url.pathname === "/slow-mode" && request.method === "POST") {
+            return handleSlowMode(request, env);
+        }
+
         return new Response("Not found", { status: 404 });
     }
 };
@@ -49,6 +58,24 @@ function checkBearer(request, expected) {
     const auth = request.headers.get("Authorization") || "";
     const match = auth.match(/^Bearer (.+)$/);
     return !!match && !!expected && match[1] === expected;
+}
+
+async function getIntervals(env, deviceId) {
+    const slowModeRaw = await env.DEVICES_KV.get(`slow-mode:${deviceId}`);
+    const isSlowed = slowModeRaw ? JSON.parse(slowModeRaw).enabled : false;
+    if (isSlowed) {
+        return {
+            heartbeat: SLOW_HEARTBEAT_INTERVAL_SECONDS,
+            commandCheck: SLOW_COMMAND_CHECK_INTERVAL_SECONDS,
+            inactivityThreshold: SLOW_INACTIVITY_THRESHOLD_SECONDS
+        };
+    } else {
+        return {
+            heartbeat: HEARTBEAT_INTERVAL_SECONDS,
+            commandCheck: COMMAND_CHECK_INTERVAL_SECONDS,
+            inactivityThreshold: INACTIVITY_THRESHOLD_SECONDS
+        };
+    }
 }
 
 async function handleHeartbeat(request, env) {
@@ -83,7 +110,14 @@ async function handleHeartbeat(request, env) {
     }
 
     await env.DEVICES_KV.put(key, JSON.stringify(record));
-    return new Response(JSON.stringify({ ok: true, id: record.id }), {
+    const intervals = await getIntervals(env, record.id);
+    return new Response(JSON.stringify({
+        ok: true,
+        id: record.id,
+        heartbeat: intervals.heartbeat,
+        commandCheck: intervals.commandCheck,
+        inactivityThreshold: intervals.inactivityThreshold
+    }), {
         headers: { "content-type": "application/json" }
     });
 }
@@ -108,13 +142,19 @@ async function handleDevices(request, env) {
         if (!raw) continue;
         const record = JSON.parse(raw);
         const ageMs = Date.now() - record.lastSeen;
-        const online = ageMs < ONLINE_GRACE_PERIOD_MS;
+
+        const slowModeRaw = await env.DEVICES_KV.get(`slow-mode:${record.id}`);
+        const isSlowed = slowModeRaw ? JSON.parse(slowModeRaw).enabled : false;
+        const thresholdMs = isSlowed ? 360 * 1000 : ONLINE_GRACE_PERIOD_MS;
+        const online = ageMs < thresholdMs;
+
         devices.push({
             id: record.id,
             hostname: record.hostname,
             ip: record.ip,
             lastSeen: record.lastSeen,
-            online
+            online,
+            status: isSlowed ? 'slowed' : (online ? 'online' : 'offline')
         });
     }
     devices.sort((a, b) => a.id - b.id);
@@ -341,6 +381,37 @@ async function handleDeleteDevice(request, env) {
                 }
             }
         }
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleSlowMode(request, env) {
+    if (!checkBearer(request, env.INTERNAL_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        return new Response("Bad Request", { status: 400 });
+    }
+
+    const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    const enabled = body && typeof body.enabled === 'boolean' ? body.enabled : false;
+
+    if (!deviceId) {
+        return new Response("Missing deviceId", { status: 400 });
+    }
+
+    const slowModeKey = `slow-mode:${deviceId}`;
+    if (enabled) {
+        await env.DEVICES_KV.put(slowModeKey, JSON.stringify({ enabled: true, timestamp: Date.now() }));
+    } else {
+        await env.DEVICES_KV.delete(slowModeKey);
     }
 
     return new Response(JSON.stringify({ ok: true }), {

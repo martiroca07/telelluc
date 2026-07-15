@@ -448,9 +448,7 @@
                 helpHeader: 'Available commands:',
                 helpLines: [
                     'help              show this help',
-                    'echo [text]       repeat the text',
                     'date              show the current date and time',
-                    'whoami            show the current user',
                     'clear / cls       clear the screen',
                     'showbanner        toggle the rainbow "telelluc" text (top-right)',
                     'language          switch the interface language (English/Español)',
@@ -465,6 +463,8 @@
                     'processes <deviceId>  list running processes',
                     'ipconfig <deviceId>  show network configuration',
                     'reset-id          reset device ID counter to 1',
+                    'slow <deviceId>   reduce polling (5 min heartbeat, 6 min offline)',
+                    'fast <deviceId>   restore normal polling',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session',
                     '',
@@ -498,9 +498,7 @@
                 helpHeader: 'Comandos disponibles:',
                 helpLines: [
                     'help              muestra esta ayuda',
-                    'echo [texto]      repite el texto',
                     'date              muestra la fecha y hora actual',
-                    'whoami            muestra el usuario actual',
                     'clear / cls       limpia la pantalla',
                     'showbanner        activa/desactiva el texto "telelluc" (arcoíris, arriba a la derecha)',
                     'language          cambia el idioma de la interfaz (English/Español)',
@@ -510,9 +508,14 @@
                     'control <deviceId>  abre una sesión de control interactiva con un dispositivo',
                     'shutdown <deviceId> [seconds]  apaga un dispositivo (countdown opcional)',
                     'reboot <deviceId> [seconds]  reinicia un dispositivo (countdown opcional)',
-                    'flip <deviceId>    gira todas las pantallas 90 grados (reversible)',
-                    'reset-id          reinicia el contador de IDs a 1',
-                    'devices           lista las máquinas de telelluc.py que se registraron',
+                    'sysinfo <deviceId>  muestra información del sistema',
+                    'disk <deviceId>     muestra el uso del disco',
+                    'processes <deviceId>  lista procesos en ejecución',
+                    'ipconfig <deviceId>  muestra configuración de red',
+                    'reset-id           reinicia el contador de IDs a 1',
+                    'slow <deviceId>    reduce el polling (heartbeat 5 min, 6 min offline)',
+                    'fast <deviceId>    restaura el polling normal',
+                    'devices            lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión',
                     '',
                     'Comandos en modo control:',
@@ -570,6 +573,7 @@
             div.className = 'line' + (className ? ' ' + className : '');
             div.textContent = text;
             output.appendChild(div);
+            scrollToBottom();
         }
 
         function scrollToBottom() {
@@ -598,15 +602,9 @@
                 bannerEnabled = !bannerEnabled;
                 cornerBanner.classList.toggle('hidden', !bannerEnabled);
             },
-            echo(args) {
-                print(args.join(' '));
-            },
             date() {
                 const now = new Date();
                 print(lang === 'es' ? now.toLocaleString('es-ES') : now.toLocaleString('en-US'));
-            },
-            whoami() {
-                print(user);
             },
             clear() {
                 output.innerHTML = '';
@@ -712,8 +710,8 @@
                     const rows = data.devices.map((d) => ({
                         id: '#' + d.id,
                         hostname: d.hostname,
-                        status: d.online ? 'online' : 'offline',
-                        lastSeen: d.online ? 'active' : formatLastSeen(d.lastSeen),
+                        status: d.status || (d.online ? 'online' : 'offline'),
+                        lastSeen: d.online || d.status === 'slowed' ? 'active' : formatLastSeen(d.lastSeen),
                         ip: d.ip
                     }));
                     const colWidth = (key, header) =>
@@ -1193,6 +1191,44 @@
                     print('Reset failed.', 'error');
                 });
             },
+            slow(args) {
+                if (args.length === 0) {
+                    print('Usage: slow <deviceId>', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/slow-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, enabled: true })
+                }).then(resp => {
+                    if (resp.ok) {
+                        print(`Device ${deviceId} set to slow mode (5 min heartbeat, 6 min offline threshold)`, 'dim');
+                        loadDevices();
+                    } else {
+                        print('Failed to set slow mode', 'error');
+                    }
+                }).catch(e => print('Error: ' + e.message, 'error'));
+            },
+            fast(args) {
+                if (args.length === 0) {
+                    print('Usage: fast <deviceId>', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch('/api/slow-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, enabled: false })
+                }).then(resp => {
+                    if (resp.ok) {
+                        print(`Device ${deviceId} set to fast mode (normal)`, 'dim');
+                        loadDevices();
+                    } else {
+                        print('Failed to set fast mode', 'error');
+                    }
+                }).catch(e => print('Error: ' + e.message, 'error'));
+            },
             logout() {
                 window.location.href = '/logout';
             }
@@ -1219,7 +1255,9 @@
                     hiddenInput.focus();
                     return;
                 }
-                waitForShellResult(deviceId, callback, 0, cmdTimestamp);
+                setTimeout(() => {
+                    waitForShellResult(deviceId, callback, 0, cmdTimestamp);
+                }, 3000);
             }).catch(() => {
                 print('Command failed.', 'error');
                 commandExecuting = false;
@@ -1310,7 +1348,7 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'paste', 'help'];
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'help'];
 
                 const parts = value.split(/\s+/);
                 const cmd = parts[0].toLowerCase();

