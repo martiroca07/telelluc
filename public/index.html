@@ -466,6 +466,7 @@
                     'slow <deviceId>   reduce polling (5 min heartbeat, 6 min offline)',
                     'fast <deviceId>   restore normal polling',
                     'force-sync <deviceId>  force immediate synchronization',
+                    'reset-device <deviceId>  force complete device reset',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session',
                     '',
@@ -517,6 +518,7 @@
                     'slow <deviceId>    reduce el polling (heartbeat 5 min, 6 min offline)',
                     'fast <deviceId>    restaura el polling normal',
                     'force-sync <deviceId>  fuerza sincronización inmediata',
+                    'reset-device <deviceId>  resetea completamente el dispositivo',
                     'devices            lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión',
                     '',
@@ -1312,6 +1314,39 @@
                     print('Sync completed', 'dim');
                     commands.devices();
                 }, 1500);
+            },
+            "reset-device"(args) {
+                if (args.length === 0) {
+                    print('Usage: reset-device <deviceId>', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                print(`Resetting device ${deviceId}...`, 'dim');
+
+                fetch('/api/slow-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, enabled: false })
+                }).then(resp => {
+                    if (resp.ok) {
+                        print('Slow mode disabled', 'dim');
+                        for (let i = 0; i < 10; i++) {
+                            setTimeout(() => {
+                                fetch('/api/command-sync', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ deviceId })
+                                }).catch(() => {});
+                            }, i * 100);
+                        }
+                        setTimeout(() => {
+                            print('Device reset complete', 'dim');
+                            commands.devices();
+                        }, 1500);
+                    } else {
+                        print('Failed to reset device', 'error');
+                    }
+                }).catch(e => print('Error: ' + e.message, 'error'));
             },
             logout() {
                 window.location.href = '/logout';
