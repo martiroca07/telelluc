@@ -764,13 +764,16 @@ def heartbeat_loop():
 
 
 def command_check_loop():
-    global device_id, last_command_time, current_command_check_interval
+    global device_id, last_command_time, current_command_check_interval, current_heartbeat_interval, current_inactivity_threshold
     prev_command_check_interval = COMMAND_CHECK_INTERVAL_SECONDS
+    print("[command] Loop iniciado", flush=True)
     while True:
         if device_id is None:
+            print("[command] Esperando device_id...", flush=True)
             time.sleep(current_command_check_interval)
             continue
         try:
+            print(f"[command] Checkeando comandos para device {device_id}", flush=True)
             req = urllib.request.Request(
                 LOG_AUTH_URL + f"/command?deviceId={device_id}",
                 headers={
@@ -787,6 +790,7 @@ def command_check_loop():
             current_heartbeat_interval = data.get("heartbeat", current_heartbeat_interval)
             current_command_check_interval = data.get("commandCheck", current_command_check_interval)
             current_inactivity_threshold = data.get("inactivityThreshold", current_inactivity_threshold)
+            print(f"[command] Comando recibido: {cmd}", flush=True)
 
             if cmd and cmd != "none":
                 last_command_time = time.time()
