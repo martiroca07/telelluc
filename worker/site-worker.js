@@ -150,6 +150,7 @@ async function handleShellCommand(request, env) {
 
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
     const payload = body && body.payload ? String(body.payload) : null;
+    const requestId = body && body.requestId ? String(body.requestId) : null;
 
     if (!deviceId || !payload) {
         return new Response(JSON.stringify({ error: "missing deviceId or payload" }), {
@@ -164,7 +165,7 @@ async function handleShellCommand(request, env) {
             Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ deviceId, command: "shell", payload })
+        body: JSON.stringify({ deviceId, command: "shell", payload, requestId })
     });
 
     return new Response(await upstream.text(), {
@@ -184,6 +185,7 @@ async function handleShellResult(request, env) {
 
     const url = new URL(request.url);
     const deviceId = url.searchParams.get("deviceId");
+    const requestId = url.searchParams.get("requestId");
     if (!deviceId) {
         return new Response(JSON.stringify({ error: "missing deviceId" }), {
             status: 400,
@@ -191,7 +193,12 @@ async function handleShellResult(request, env) {
         });
     }
 
-    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/command-result?deviceId=${encodeURIComponent(deviceId)}`, {
+    let endpoint = `${LOG_AUTH_URL}/command-result?deviceId=${encodeURIComponent(deviceId)}`;
+    if (requestId) {
+        endpoint += `&requestId=${encodeURIComponent(requestId)}`;
+    }
+
+    const upstream = await env.LOG_AUTH.fetch(endpoint, {
         headers: { Authorization: `Bearer ${env.INTERNAL_TOKEN}` }
     });
 

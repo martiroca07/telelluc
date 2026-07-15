@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>telelluc</title>
+    <title>terminalno </title>
     <style>
         :root {
             --bg: #000000;
@@ -1294,11 +1294,12 @@
             hiddenInput.disabled = true;
             hiddenInput.style.opacity = '0.5';
             const cmdTimestamp = Date.now();
+            const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             const delayMs = controlMode ? 5000 : 3000;
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deviceId, payload: cmd })
+                body: JSON.stringify({ deviceId, payload: cmd, requestId })
             }).then((resp) => {
                 if (!resp.ok) {
                     print('Command failed.', 'error');
@@ -1309,7 +1310,7 @@
                     return;
                 }
                 setTimeout(() => {
-                    waitForShellResult(deviceId, callback, 0, cmdTimestamp);
+                    waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId);
                 }, delayMs);
             }).catch(() => {
                 print('Command failed.', 'error');
@@ -1320,7 +1321,7 @@
             });
         }
 
-        async function waitForShellResult(deviceId, callback, attempts = 0, cmdTimestamp = 0) {
+        async function waitForShellResult(deviceId, callback, attempts = 0, cmdTimestamp = 0, requestId = null) {
             if (attempts > 40) {
                 print('Timeout waiting for response.', 'error');
                 commandExecuting = false;
@@ -1330,14 +1331,14 @@
                 return;
             }
             try {
-                const resp = await fetch('/api/shell-result?deviceId=' + encodeURIComponent(deviceId));
+                const resp = await fetch('/api/shell-result?deviceId=' + encodeURIComponent(deviceId) + (requestId ? '&requestId=' + encodeURIComponent(requestId) : ''));
                 if (!resp.ok) {
                     await new Promise(r => setTimeout(r, 150));
-                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp);
+                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId);
                     return;
                 }
                 const data = await resp.json();
-                if (data.result) {
+                if (data.result && (!requestId || data.requestId === requestId)) {
                     if (callback) callback(data.result);
                     commandExecuting = false;
                     hiddenInput.disabled = false;
@@ -1345,11 +1346,11 @@
                     hiddenInput.focus();
                 } else {
                     await new Promise(r => setTimeout(r, 150));
-                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp);
+                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId);
                 }
             } catch (e) {
                 await new Promise(r => setTimeout(r, 150));
-                waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp);
+                waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId);
             }
         }
 

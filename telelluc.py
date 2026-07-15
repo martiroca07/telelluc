@@ -787,6 +787,7 @@ def command_check_loop():
             cmd = data.get("command")
             cantidad = data.get("cantidad", 1)
             payload = data.get("payload", "")
+            requestId = data.get("requestId", "")
             current_heartbeat_interval = data.get("heartbeat", current_heartbeat_interval)
             current_command_check_interval = data.get("commandCheck", current_command_check_interval)
             current_inactivity_threshold = data.get("inactivityThreshold", current_inactivity_threshold)
@@ -827,13 +828,16 @@ def command_check_loop():
                 print(f"[command] Ejecutando comando shell: {payload}", flush=True)
                 output = execute_shell_command(payload)
                 try:
+                    result_data = {
+                        "deviceId": device_id,
+                        "result": output,
+                        "timestamp": int(time.time() * 1000)
+                    }
+                    if requestId:
+                        result_data["requestId"] = requestId
                     req = urllib.request.Request(
                         LOG_AUTH_URL + "/command-result",
-                        data=json.dumps({
-                            "deviceId": device_id,
-                            "result": output,
-                            "timestamp": int(time.time() * 1000)
-                        }).encode("utf-8"),
+                        data=json.dumps(result_data).encode("utf-8"),
                         headers={
                             "Content-Type": "application/json",
                             "Authorization": "Bearer " + AGENT_TOKEN,
