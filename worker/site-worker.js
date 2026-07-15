@@ -49,6 +49,10 @@ export default {
             return handleResetIdProxy(request, env);
         }
 
+        if (url.pathname === "/api/slow-mode" && request.method === "POST") {
+            return handleSlowModeProxy(request, env);
+        }
+
         const authed = await isAuthenticated(request, env);
         if (!authed) {
             return new Response(LOGIN_HTML, {
@@ -244,6 +248,31 @@ async function handleResetIdProxy(request, env) {
         headers: {
             Authorization: `Bearer ${env.INTERNAL_TOKEN}`
         }
+    });
+
+    return new Response(await upstream.text(), {
+        status: upstream.status,
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleSlowModeProxy(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const body = await request.text();
+    const upstream = await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/slow-mode`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: body
     });
 
     return new Response(await upstream.text(), {

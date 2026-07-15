@@ -903,6 +903,10 @@
                 });
             },
             cd(args) {
+                if (!controlMode) {
+                    print('cd command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: cd <path>', 'dim');
                     return;
@@ -924,6 +928,10 @@
                 });
             },
             ls(args) {
+                if (!controlMode) {
+                    print('ls command only available in control mode.', 'error');
+                    return;
+                }
                 let cmd = 'dir';
                 if (args.length > 0) {
                     cmd += ` ${args.join(' ')}`;
@@ -945,6 +953,13 @@
                         print('Directory is empty', 'dim');
                     }
                 });
+            },
+            pwd(args) {
+                if (!controlMode) {
+                    print('pwd command only available in control mode.', 'error');
+                    return;
+                }
+                print(currentPath);
             },
             exit(args) {
                 controlMode = false;
@@ -989,6 +1004,10 @@
                 }
             },
             nano(args) {
+                if (!controlMode) {
+                    print('nano command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: nano <filename>', 'dim');
                     return;
@@ -1004,6 +1023,10 @@
                 });
             },
             delete(args) {
+                if (!controlMode) {
+                    print('delete command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: delete <filename>', 'dim');
                     return;
@@ -1015,6 +1038,10 @@
                 });
             },
             copy(args) {
+                if (!controlMode) {
+                    print('copy command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: copy <file or path>', 'dim');
                     return;
@@ -1028,6 +1055,10 @@
                 });
             },
             paste(args) {
+                if (!controlMode) {
+                    print('paste command only available in control mode.', 'error');
+                    return;
+                }
                 let destination = '';
                 if (args.length > 0) {
                     destination = args.join(' ');
@@ -1040,6 +1071,10 @@
                 });
             },
             cut(args) {
+                if (!controlMode) {
+                    print('cut command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: cut <file or path>', 'dim');
                     return;
@@ -1053,6 +1088,10 @@
                 });
             },
             cat(args) {
+                if (!controlMode) {
+                    print('cat command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: cat <filename>', 'dim');
                     return;
@@ -1064,6 +1103,10 @@
                 });
             },
             mkdir(args) {
+                if (!controlMode) {
+                    print('mkdir command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length === 0) {
                     print('Usage: mkdir <dirname>', 'dim');
                     return;
@@ -1075,6 +1118,10 @@
                 });
             },
             move(args) {
+                if (!controlMode) {
+                    print('move command only available in control mode.', 'error');
+                    return;
+                }
                 if (args.length < 2) {
                     print('Usage: move <source> <destination>', 'dim');
                     return;
@@ -1234,6 +1281,7 @@
             }
         };
         commands.cls = commands.clear;
+        commands.dir = commands.ls;
 
         const commandNames = Object.keys(commands).sort();
 
@@ -1378,7 +1426,12 @@
 
                 return [];
             }
-            return commandNames.filter((name) => name.startsWith(v) && name !== 'exit');
+            const controlOnlyCommands = ['cd', 'ls', 'pwd', 'nano', 'delete', 'mkdir', 'copy', 'cut', 'paste', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'dir'];
+            return commandNames.filter((name) =>
+                name.startsWith(v) &&
+                name !== 'exit' &&
+                !controlOnlyCommands.includes(name)
+            );
         }
 
         function renderSuggestions() {
