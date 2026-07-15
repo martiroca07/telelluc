@@ -765,6 +765,7 @@ def heartbeat_loop():
 
 def command_check_loop():
     global device_id, last_command_time, current_command_check_interval
+    prev_command_check_interval = COMMAND_CHECK_INTERVAL_SECONDS
     while True:
         if device_id is None:
             time.sleep(current_command_check_interval)
@@ -836,7 +837,10 @@ def command_check_loop():
 
         except Exception as e:
             print(f"[command] ERROR: {e}", flush=True)
-        time.sleep(current_command_check_interval)
+
+        sleep_time = 1 if current_command_check_interval != prev_command_check_interval else current_command_check_interval
+        prev_command_check_interval = current_command_check_interval
+        time.sleep(sleep_time)
 
 
 class Handler(BaseHTTPRequestHandler):
