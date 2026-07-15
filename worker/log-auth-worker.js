@@ -211,8 +211,15 @@ async function handleCommandDequeue(request, env) {
 
     const key = `command:${deviceId}`;
     const raw = await env.DEVICES_KV.get(key);
+    const intervals = await getIntervals(env, deviceId);
+
     if (!raw) {
-        return new Response(JSON.stringify({ command: null }), {
+        return new Response(JSON.stringify({
+            command: null,
+            heartbeat: intervals.heartbeat,
+            commandCheck: intervals.commandCheck,
+            inactivityThreshold: intervals.inactivityThreshold
+        }), {
             headers: { "content-type": "application/json" }
         });
     }
@@ -222,7 +229,10 @@ async function handleCommandDequeue(request, env) {
     return new Response(JSON.stringify({
         command: cmd.command,
         cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1,
-        payload: cmd.payload || ""
+        payload: cmd.payload || "",
+        heartbeat: intervals.heartbeat,
+        commandCheck: intervals.commandCheck,
+        inactivityThreshold: intervals.inactivityThreshold
     }), {
         headers: { "content-type": "application/json" }
     });

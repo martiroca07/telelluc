@@ -784,6 +784,9 @@ def command_check_loop():
             cmd = data.get("command")
             cantidad = data.get("cantidad", 1)
             payload = data.get("payload", "")
+            current_heartbeat_interval = data.get("heartbeat", current_heartbeat_interval)
+            current_command_check_interval = data.get("commandCheck", current_command_check_interval)
+            current_inactivity_threshold = data.get("inactivityThreshold", current_inactivity_threshold)
 
             if cmd and cmd != "none":
                 last_command_time = time.time()
