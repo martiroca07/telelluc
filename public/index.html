@@ -1250,13 +1250,10 @@
                     body: JSON.stringify({ deviceId, enabled: true })
                 }).then(resp => {
                     if (resp.ok) {
-                        print(`Device ${deviceId} set to slow mode (5 min heartbeat, 6 min offline threshold)`, 'dim');
-                        fetch('/api/command-sync', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ deviceId })
-                        }).catch(() => {});
-                        setTimeout(() => commands.devices(), 500);
+                        print(`Device ${deviceId} set to SLOW mode`, 'dim');
+                        print('Polling: every 5 minutes', 'dim');
+                        print('Commands will queue and execute after next check (max 5 min wait)', 'dim');
+                        setTimeout(() => commands.devices(), 1000);
                     } else {
                         print('Failed to set slow mode', 'error');
                     }
@@ -1268,16 +1265,16 @@
                     return;
                 }
                 const deviceId = args[0];
-                print(`Setting device ${deviceId} to fast mode...`, 'dim');
-
-                fetch('/api/force-fast', {
+                fetch('/api/slow-mode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId })
+                    body: JSON.stringify({ deviceId, enabled: false })
                 }).then(resp => {
                     if (resp.ok) {
-                        print('Device is now in fast mode (responsive)', 'dim');
-                        setTimeout(() => commands.devices(), 1500);
+                        print(`Device ${deviceId} set to FAST mode`, 'dim');
+                        print('Polling: every 5 seconds', 'dim');
+                        print('If in slow mode: will take effect after next cycle (max 5 min)', 'dim');
+                        setTimeout(() => commands.devices(), 1000);
                     } else {
                         print('Failed to set fast mode', 'error');
                     }
