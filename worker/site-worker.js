@@ -57,6 +57,10 @@ export default {
             return handleCommandSyncProxy(request, env);
         }
 
+        if (url.pathname === "/api/force-fast" && request.method === "POST") {
+            return handleForceFastProxy(request, env);
+        }
+
         const authed = await isAuthenticated(request, env);
         if (!authed) {
             return new Response(LOGIN_HTML, {
@@ -322,6 +326,64 @@ async function handleCommandSyncProxy(request, env) {
     });
 
     return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleForceFastProxy(request, env) {
+    const authed = await isAuthenticated(request, env);
+    if (!authed) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (e) {
+        return new Response(JSON.stringify({ error: "bad request" }), {
+            status: 400,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    const deviceId = body && body.deviceId ? String(body.deviceId) : null;
+    if (!deviceId) {
+        return new Response(JSON.stringify({ error: "missing deviceId" }), {
+            status: 400,
+            headers: { "content-type": "application/json" }
+        });
+    }
+
+    await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/slow-mode`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ deviceId, enabled: false })
+    }).catch(() => {});
+
+    for (let i = 0; i < 15; i++) {
+        setTimeout(async () => {
+            await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/command`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ deviceId, command: "__sync__" })
+            }).catch(() => {});
+        }, i * 50);
+    }
+
+    return new Response(JSON.stringify({
+        ok: true,
+        message: `Device ${deviceId} forced to fast mode`
+    }), {
         status: 200,
         headers: { "content-type": "application/json" }
     });

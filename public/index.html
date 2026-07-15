@@ -1321,32 +1321,27 @@
                     return;
                 }
                 const deviceId = args[0];
-                print(`Resetting device ${deviceId}...`, 'dim');
+                print(`🔧 FORCEFULLY RESETTING device ${deviceId}...`, 'dim');
 
-                fetch('/api/slow-mode', {
+                fetch('/api/force-fast', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, enabled: false })
+                    body: JSON.stringify({ deviceId })
                 }).then(resp => {
                     if (resp.ok) {
-                        print('Slow mode disabled', 'dim');
-                        for (let i = 0; i < 10; i++) {
-                            setTimeout(() => {
-                                fetch('/api/command-sync', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ deviceId })
-                                }).catch(() => {});
-                            }, i * 100);
-                        }
-                        setTimeout(() => {
-                            print('Device reset complete', 'dim');
-                            commands.devices();
-                        }, 1500);
-                    } else {
-                        print('Failed to reset device', 'error');
+                        return resp.json();
                     }
-                }).catch(e => print('Error: ' + e.message, 'error'));
+                    throw new Error('Failed');
+                }).then(data => {
+                    print('✅ Device forced to fast mode', 'dim');
+                    print('📡 Sending 15 sync commands...', 'dim');
+                    setTimeout(() => {
+                        print('✓ Reset complete - device should be responsive now', 'dim');
+                        commands.devices();
+                    }, 2000);
+                }).catch(e => {
+                    print('❌ Reset failed: ' + e.message, 'error');
+                });
             },
             logout() {
                 window.location.href = '/logout';
@@ -1362,6 +1357,7 @@
             hiddenInput.disabled = true;
             hiddenInput.style.opacity = '0.5';
             const cmdTimestamp = Date.now();
+            const delayMs = controlMode ? 5000 : 3000;
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1377,7 +1373,7 @@
                 }
                 setTimeout(() => {
                     waitForShellResult(deviceId, callback, 0, cmdTimestamp);
-                }, 3000);
+                }, delayMs);
             }).catch(() => {
                 print('Command failed.', 'error');
                 commandExecuting = false;

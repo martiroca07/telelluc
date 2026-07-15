@@ -755,11 +755,11 @@ def heartbeat_loop():
             current_command_check_interval = data.get("commandCheck", COMMAND_CHECK_INTERVAL_SECONDS)
             current_inactivity_threshold = data.get("inactivityThreshold", INACTIVITY_THRESHOLD_SECONDS)
             print(f"[heartbeat] OK - device {device_id} ({hostname}) - {status}", flush=True)
-            prev_heartbeat_interval = current_heartbeat_interval
         except Exception as e:
             print(f"[heartbeat] ERROR: {e}", flush=True)
 
         sleep_time = 1 if current_heartbeat_interval != prev_heartbeat_interval else current_heartbeat_interval
+        prev_heartbeat_interval = current_heartbeat_interval
         time.sleep(sleep_time)
 
 
