@@ -260,7 +260,7 @@ async function handleCommandResult(request, env) {
         return new Response("Missing deviceId or result", { status: 400 });
     }
 
-    const key = `command-result:${deviceId}`;
+    const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
     await env.DEVICES_KV.put(key, JSON.stringify({ result, requestId, timestamp }), {
         expirationTtl: 600
     });
@@ -277,11 +277,12 @@ async function handleGetCommandResult(request, env) {
 
     const url = new URL(request.url);
     const deviceId = url.searchParams.get("deviceId");
+    const requestId = url.searchParams.get("requestId");
     if (!deviceId) {
         return new Response("Missing deviceId", { status: 400 });
     }
 
-    const key = `command-result:${deviceId}`;
+    const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
     const raw = await env.DEVICES_KV.get(key);
     if (!raw) {
         return new Response(JSON.stringify({ result: null }), {
