@@ -465,6 +465,7 @@
                     'reset-id          reset device ID counter to 1',
                     'slow <deviceId>   reduce polling (5 min heartbeat, 6 min offline)',
                     'fast <deviceId>   restore normal polling',
+                    'force-sync <deviceId>  force immediate synchronization',
                     'devices           list telelluc.py machines that have checked in',
                     'logout            end the session',
                     '',
@@ -515,6 +516,7 @@
                     'reset-id           reinicia el contador de IDs a 1',
                     'slow <deviceId>    reduce el polling (heartbeat 5 min, 6 min offline)',
                     'fast <deviceId>    restaura el polling normal',
+                    'force-sync <deviceId>  fuerza sincronización inmediata',
                     'devices            lista las máquinas de telelluc.py que se registraron',
                     'logout            cierra la sesión',
                     '',
@@ -1275,16 +1277,41 @@
                 }).then(resp => {
                     if (resp.ok) {
                         print(`Device ${deviceId} set to fast mode (normal)`, 'dim');
+                        for (let i = 0; i < 3; i++) {
+                            setTimeout(() => {
+                                fetch('/api/command-sync', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ deviceId })
+                                }).catch(() => {});
+                            }, i * 500);
+                        }
+                        setTimeout(() => commands.devices(), 2000);
+                    } else {
+                        print('Failed to set fast mode', 'error');
+                    }
+                }).catch(e => print('Error: ' + e.message, 'error'));
+            },
+            "force-sync"(args) {
+                if (args.length === 0) {
+                    print('Usage: force-sync <deviceId>', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                print('Sending sync commands...', 'dim');
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
                         fetch('/api/command-sync', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ deviceId })
                         }).catch(() => {});
-                        setTimeout(() => commands.devices(), 500);
-                    } else {
-                        print('Failed to set fast mode', 'error');
-                    }
-                }).catch(e => print('Error: ' + e.message, 'error'));
+                    }, i * 200);
+                }
+                setTimeout(() => {
+                    print('Sync completed', 'dim');
+                    commands.devices();
+                }, 1500);
             },
             logout() {
                 window.location.href = '/logout';
