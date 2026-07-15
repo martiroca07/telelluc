@@ -1295,7 +1295,6 @@
             hiddenInput.style.opacity = '0.5';
             const cmdTimestamp = Date.now();
             const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            const delayMs = controlMode ? 5000 : 3000;
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1309,9 +1308,7 @@
                     hiddenInput.focus();
                     return;
                 }
-                setTimeout(() => {
-                    waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId);
-                }, delayMs);
+                waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId);
             }).catch(() => {
                 print('Command failed.', 'error');
                 commandExecuting = false;
