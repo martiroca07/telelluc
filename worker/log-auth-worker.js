@@ -231,6 +231,7 @@ async function handleCommandDequeue(request, env) {
         command: cmd.command,
         cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1,
         payload: cmd.payload || "",
+        requestId: cmd.requestId || "",
         heartbeat: intervals.heartbeat,
         commandCheck: intervals.commandCheck,
         inactivityThreshold: intervals.inactivityThreshold

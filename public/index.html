@@ -1308,7 +1308,10 @@
                     hiddenInput.focus();
                     return;
                 }
-                waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId);
+                const delayMs = controlMode ? 500 : 0;
+                setTimeout(() => {
+                    waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId);
+                }, delayMs);
             }).catch(() => {
                 print('Command failed.', 'error');
                 commandExecuting = false;
