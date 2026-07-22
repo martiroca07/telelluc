@@ -20,11 +20,21 @@ def request_admin_privileges():
     except:
         pass
 
+    admin_flag = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent", "admin_requested.flag")
+    if os.path.exists(admin_flag):
+        return False
+
+    try:
+        os.makedirs(os.path.dirname(admin_flag), exist_ok=True)
+        with open(admin_flag, "w") as f:
+            f.write("")
+    except:
+        pass
+
     try:
         ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
         sys.exit(0)
-    except Exception as e:
-        print(f"Failed to elevate privileges: {e}")
+    except Exception:
         return False
 
 # cd /d C:\Users\User\Desktop\telelluc
