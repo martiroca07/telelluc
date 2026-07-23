@@ -432,19 +432,22 @@ def execute_shell_command(cmd_str):
                 if not items:
                     return "Directory is empty"
 
-                # Format output with aligned columns: [size/type] [filename]
+                # Format output with aligned columns and header
                 output_lines = []
+                output_lines.append("Name                           Size       Type")
+                output_lines.append("─" * 60)
+
                 for name, size_type, _ in items:
                     if size_type == "<DIR>":
-                        output_lines.append(f"  {size_type:<6}  {name}")
+                        output_lines.append(f"{name:<30}  <DIR>")
                     else:
-                        output_lines.append(f"  {size_type:>9}  {name}")
+                        output_lines.append(f"{name:<30}  {size_type:>9}")
 
                 output = "\n".join(output_lines)
                 lines = output.split("\n")
-                if len(lines) > 110:
-                    more_count = len(lines) - 100
-                    output = "\n".join(lines[:100]) + f"\n  ... and {more_count} more items"
+                if len(lines) > 112:
+                    more_count = len(lines) - 110
+                    output = "\n".join(lines[:110]) + f"\n  ... and {more_count} more items"
                 return output
             except Exception as e:
                 return f"Error: {str(e)}"

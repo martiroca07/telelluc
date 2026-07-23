@@ -1050,6 +1050,21 @@
                     print(output);
                 });
             },
+            rm(args) {
+                if (!controlMode) {
+                    print('rm command only available in control mode.', 'error');
+                    return;
+                }
+                if (args.length === 0) {
+                    print('Usage: rm <filename>', 'dim');
+                    return;
+                }
+                const filename = args.join(' ');
+                const cmd = `rm ${filename}`;
+                sendRemoteCommand(activeDevice, cmd, (output) => {
+                    print(output);
+                });
+            },
             copy(args) {
                 if (!controlMode) {
                     print('copy command only available in control mode.', 'error');
@@ -1427,7 +1442,7 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload', 'max_audio', 'min_audio', 'mute', 'unmute'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload', 'max_audio', 'min_audio', 'mute', 'unmute'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
                 print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, max_audio, min_audio, mute, unmute, clear, cls, help, exit`, 'error');
@@ -1454,7 +1469,7 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'mute', 'unmute', 'help'];
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'mute', 'unmute', 'help'];
 
                 const parts = value.split(/\s+/);
                 const cmd = parts[0].toLowerCase();
@@ -1572,22 +1587,46 @@
                 const lines = dirOutput.split('\n');
                 const files = [];
                 const folders = [];
+                let isNewFormat = false;
 
-                lines.forEach(line => {
+                lines.forEach((line, idx) => {
                     const trimmed = line.trim();
-                    if (!trimmed || trimmed.startsWith('Directory of') || trimmed.startsWith('Volume') || trimmed === '' || trimmed.match(/^\d+\s+File/)) {
+
+                    // Skip empty lines, headers, and separator lines
+                    if (!trimmed || trimmed.startsWith('Name') || trimmed.match(/^─+$/) ||
+                        trimmed.startsWith('Directory of') || trimmed.startsWith('Volume')) {
+                        if (trimmed.startsWith('Name')) isNewFormat = true;
                         return;
                     }
 
-                    const parts = trimmed.split(/\s+/);
-                    if (parts.length >= 4) {
-                        const name = parts.slice(3).join(' ');
-                        if (trimmed.includes('<DIR>') || trimmed.includes('<JUNCTION>')) {
-                            if (name !== '.' && name !== '..') {
+                    if (isNewFormat) {
+                        // New format: "Name                           Size       Type"
+                        // Directories: "Desktop                        <DIR>"
+                        // Files: "Firefox.exe                     383.1KB"
+                        if (trimmed.includes('<DIR>')) {
+                            const name = trimmed.split(/\s+<DIR>/)[0].trim();
+                            if (name && name !== '.' && name !== '..') {
                                 folders.push(name);
                             }
-                        } else if (name && !name.match(/^\d+\s+(File|Dir)/)) {
-                            files.push(name);
+                        } else if (trimmed && !trimmed.includes('...') && trimmed.match(/\s+[0-9]/)) {
+                            // Match files with size pattern (ends with size like "383.1KB" or "949B")
+                            const name = trimmed.replace(/\s+[0-9B.KMG]+\s*$/, '').trim();
+                            if (name && name !== '.' && name !== '..') {
+                                files.push(name);
+                            }
+                        }
+                    } else {
+                        // Old format fallback
+                        const parts = trimmed.split(/\s+/);
+                        if (parts.length >= 4) {
+                            const name = parts.slice(3).join(' ');
+                            if (trimmed.includes('<DIR>') || trimmed.includes('<JUNCTION>')) {
+                                if (name !== '.' && name !== '..') {
+                                    folders.push(name);
+                                }
+                            } else if (name && !name.match(/^\d+\s+(File|Dir)/)) {
+                                files.push(name);
+                            }
                         }
                     }
                 });
@@ -1753,6 +1792,17 @@
             hiddenInput.focus();
             updatePrompt();
             print(t().welcome, 'dim');
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (controlMode && activeDevice) {
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId: activeDevice, payload: 'exit' }),
+                    keepalive: true
+                }).catch(() => {});
+            }
         });
     </script>
     <div id="nano-editor-overlay" class="hidden">
