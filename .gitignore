@@ -1,13 +1,46 @@
-.wrangler/
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.log
-*.tmp
-*.spec
-build/
-dist/
-.vscode/
+*.pyc
 .venv/
 env/
+venv/
+*.egg-info/
+
+# Build & Distribution
+build/
+dist/
+*.spec
+
+# Temporary & Log Files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS
+.DS_Store
+Thumbs.db
+.windows/
+
+# Wrangler (Cloudflare)
+.wrangler/
+wrangler.toml.local
+
+# Node (if used)
+node_modules/
+package-lock.json
+
+# Environment (sensitive)
+.env
+.env.local
+.env.*.local

@@ -994,8 +994,9 @@
                     print('start <file>      open file or program');
                     print('get <file>        download file (max 10MB)');
                     print('upload [path]     upload file to device (max 10MB)');
-                    print('max_audio         set volume to maximum (100%)');
-                    print('min_audio         set volume to minimum (0%, mute)');
+                    print('max_audio         set volume to 100% (unmutes)');
+                    print('min_audio         set volume to 0% (muted)');
+                    print('mute              mute audio');
                     print('clear / cls       clear the screen');
                     print('help              show this help');
                     print('exit              exit control mode');
@@ -1299,6 +1300,15 @@
                     if (output) print(output, 'dim');
                 });
             },
+            mute(args) {
+                if (!controlMode) {
+                    print('mute command only available in control mode.', 'error');
+                    return;
+                }
+                sendRemoteCommand(activeDevice, 'mute', (output) => {
+                    if (output) print(output, 'dim');
+                });
+            },
             logout() {
                 window.location.href = '/logout';
             }
@@ -1327,6 +1337,10 @@
                     hiddenInput.focus();
                     return;
                 }
+                // IMPORTANT: 500ms delay ONLY in control mode because agent checks every 5 seconds
+                // Without delay: frontend polls immediately while agent is still sleeping
+                // Timeout occurs at 6 seconds (40 attempts × 150ms) before agent dequeues
+                // 500ms gives agent time to reach next check cycle without waiting full 5 seconds
                 const delayMs = controlMode ? 500 : 0;
                 setTimeout(() => {
                     waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId);
@@ -1394,10 +1408,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload', 'max_audio', 'min_audio'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload', 'max_audio', 'min_audio', 'mute'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, max_audio, min_audio, clear, cls, help, exit`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, max_audio, min_audio, mute, clear, cls, help, exit`, 'error');
                 return;
             }
 
@@ -1421,7 +1435,7 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'help'];
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'mute', 'help'];
 
                 const parts = value.split(/\s+/);
                 const cmd = parts[0].toLowerCase();
