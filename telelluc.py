@@ -239,13 +239,16 @@ def ensure_startup():
                     # >= condition catches both "just copied" (equal) and "was recently executed" (newer) cases
                     # This ensures the executable always runs from startup on each launch
                     if os.path.getmtime(startup_exe) >= os.path.getmtime(source_exe):
+                        # Launch startup version
                         subprocess.Popen(
                             [startup_exe],
                             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL,
                         )
+                        # Schedule delete and wait briefly for startup to take over
                         _schedule_delete(source_exe)
+                        time.sleep(1)
                         os._exit(0)
                 except OSError:
                     pass
