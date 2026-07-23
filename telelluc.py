@@ -816,26 +816,14 @@ def execute_shell_command(cmd_str):
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
                 if result.returncode == 0:
-                    return "Volume: 100% (Note: reinstalling audio drivers will unmute)"
+                    return "Volume: 100%"
                 return "Error: Failed to set volume"
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle mute command - sets volume to 0% and toggles mute with PowerShell
+        # Handle mute command - mutes audio without changing volume
         if cmd_lower == "mute":
             try:
-                nircmd_path = ensure_nircmd()
-                if not nircmd_path:
-                    return "Error: Could not download nircmd"
-
-                # Set volume to 0% (silent level)
-                subprocess.run(
-                    [nircmd_path, "setsysvolume", "0"],
-                    capture_output=True,
-                    timeout=5,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-                )
-
                 # Toggle mute using PowerShell (char 173 = mute key)
                 subprocess.run(
                     ["powershell", "-command", "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"],
@@ -844,25 +832,13 @@ def execute_shell_command(cmd_str):
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
 
-                return "Audio: muted (volume 0%)"
+                return "Audio: muted"
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle unmute command - sets volume to 50% and toggles mute with PowerShell
+        # Handle unmute command - unmutes audio without changing volume
         if cmd_lower == "unmute":
             try:
-                nircmd_path = ensure_nircmd()
-                if not nircmd_path:
-                    return "Error: Could not download nircmd"
-
-                # Set volume to 50% (audible level)
-                subprocess.run(
-                    [nircmd_path, "setsysvolume", "32767"],
-                    capture_output=True,
-                    timeout=5,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-                )
-
                 # Toggle mute using PowerShell (char 173 = mute key)
                 subprocess.run(
                     ["powershell", "-command", "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"],
@@ -871,7 +847,7 @@ def execute_shell_command(cmd_str):
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
 
-                return "Audio: unmuted (volume 50%)"
+                return "Audio: unmuted"
             except Exception as e:
                 return f"Error: {str(e)}"
 
