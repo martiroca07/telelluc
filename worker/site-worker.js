@@ -375,16 +375,15 @@ async function handleForceFastProxy(request, env) {
     }).catch(() => {});
 
     for (let i = 0; i < 15; i++) {
-        setTimeout(async () => {
-            await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/command`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ deviceId, command: "__sync__" })
-            }).catch(() => {});
-        }, i * 50);
+        await new Promise(resolve => setTimeout(resolve, i * 50));
+        await env.LOG_AUTH.fetch(`${LOG_AUTH_URL}/command`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${env.INTERNAL_TOKEN}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ deviceId, command: "__sync__" })
+        }).catch(() => {});
     }
 
     return new Response(JSON.stringify({

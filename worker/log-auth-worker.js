@@ -62,7 +62,14 @@ function checkBearer(request, expected) {
 
 async function getIntervals(env, deviceId) {
     const slowModeRaw = await env.DEVICES_KV.get(`slow-mode:${deviceId}`);
-    const isSlowed = slowModeRaw ? JSON.parse(slowModeRaw).enabled : false;
+    let isSlowed = false;
+    if (slowModeRaw) {
+        try {
+            isSlowed = JSON.parse(slowModeRaw).enabled || false;
+        } catch (e) {
+            isSlowed = false;
+        }
+    }
     if (isSlowed) {
         return {
             heartbeat: SLOW_HEARTBEAT_INTERVAL_SECONDS,
@@ -101,7 +108,11 @@ async function handleHeartbeat(request, env) {
     const existingRaw = await env.DEVICES_KV.get(key);
     let record;
     if (existingRaw) {
-        record = JSON.parse(existingRaw);
+        try {
+            record = JSON.parse(existingRaw);
+        } catch (e) {
+            record = {};
+        }
         record.ip = ip;
         record.lastSeen = Date.now();
     } else {
@@ -225,7 +236,20 @@ async function handleCommandDequeue(request, env) {
         });
     }
 
-    const cmd = JSON.parse(raw);
+    let cmd;
+    try {
+        cmd = JSON.parse(raw);
+    } catch (e) {
+        return new Response(JSON.stringify({
+            command: null,
+            heartbeat: intervals.heartbeat,
+            commandCheck: intervals.commandCheck,
+            inactivityThreshold: intervals.inactivityThreshold
+        }), {
+            headers: { "content-type": "application/json" }
+        });
+    }
+
     await env.DEVICES_KV.delete(key);
     return new Response(JSON.stringify({
         command: cmd.command,

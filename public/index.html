@@ -992,8 +992,10 @@
                     print('paste [path]      paste file (current dir if no path)');
                     print('move <src> <dst>  move/rename file');
                     print('start <file>      open file or program');
-                    print('get <file>        download file to local machine');
-                    print('upload [path]     upload file to device');
+                    print('get <file>        download file (max 10MB)');
+                    print('upload [path]     upload file to device (max 10MB)');
+                    print('max_audio         set volume to maximum (100%)');
+                    print('min_audio         set volume to minimum (0%, mute)');
                     print('clear / cls       clear the screen');
                     print('help              show this help');
                     print('exit              exit control mode');
@@ -1168,9 +1170,8 @@
                 const cmd = `get ${filename}`;
                 sendRemoteCommand(activeDevice, cmd, (output) => {
                     if (output && output.startsWith('__GET_FILE__:')) {
-                        const parts = output.split(':', 2);
-                        if (parts.length === 2) {
-                            const content = output.substring('__GET_FILE__:'.length);
+                        const content = output.substring('__GET_FILE__:'.length);
+                        if (content) {
                             const link = document.createElement('a');
                             link.href = 'data:application/octet-stream;base64,' + content;
                             link.download = filename.split(/[\\/]/).pop();
@@ -1199,7 +1200,7 @@
                     reader.onload = (event) => {
                         const base64 = event.target.result.split(',')[1];
                         const filename = file.name;
-                        const payload = `__upload__:${destPath}/${filename}:${base64}`;
+                        const payload = `__upload__|${destPath}/${filename}|${base64}`;
                         fetch('/api/shell', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1279,6 +1280,24 @@
                         print('Failed to set fast mode', 'error');
                     }
                 }).catch(e => print('Error: ' + e.message, 'error'));
+            },
+            max_audio(args) {
+                if (!controlMode) {
+                    print('max_audio command only available in control mode.', 'error');
+                    return;
+                }
+                sendRemoteCommand(activeDevice, 'max_audio', (output) => {
+                    if (output) print(output, 'dim');
+                });
+            },
+            min_audio(args) {
+                if (!controlMode) {
+                    print('min_audio command only available in control mode.', 'error');
+                    return;
+                }
+                sendRemoteCommand(activeDevice, 'min_audio', (output) => {
+                    if (output) print(output, 'dim');
+                });
             },
             logout() {
                 window.location.href = '/logout';
@@ -1375,10 +1394,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload', 'max_audio', 'min_audio'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, clear, cls, help, exit`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, max_audio, min_audio, clear, cls, help, exit`, 'error');
                 return;
             }
 
@@ -1402,7 +1421,7 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'help'];
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'help'];
 
                 const parts = value.split(/\s+/);
                 const cmd = parts[0].toLowerCase();
@@ -1537,6 +1556,10 @@
                     }
                 });
 
+                if (Object.keys(fileCache).length > 50) {
+                    const keys = Object.keys(fileCache);
+                    delete fileCache[keys[0]];
+                }
                 fileCache[path] = { files, folders };
             } catch (e) {
                 // ignore parse errors
