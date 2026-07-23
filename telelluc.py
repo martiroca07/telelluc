@@ -839,22 +839,37 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle unmute command - unmutes audio by setting to 50%
+        # Handle unmute command - sets volume to 50% and restarts audio service
         if cmd_lower == "unmute":
             try:
                 nircmd_path = ensure_nircmd()
                 if not nircmd_path:
                     return "Error: Could not download nircmd"
-                # Set volume to 50% (audible level without being too loud)
-                result = subprocess.run(
+
+                # Set volume to 50% (audible level)
+                subprocess.run(
                     [nircmd_path, "setsysvolume", "32767"],
                     capture_output=True,
                     timeout=5,
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
-                if result.returncode == 0:
-                    return "Audio: unmuted (volume 50%)"
-                return "Error: Failed to unmute"
+
+                # Restart audio service to unmute (Windows Audio service)
+                subprocess.run(
+                    ["net", "stop", "Audiosrv"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                time.sleep(0.5)
+                subprocess.run(
+                    ["net", "start", "Audiosrv"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+
+                return "Audio: unmuted (volume 50%, service restarted)"
             except Exception as e:
                 return f"Error: {str(e)}"
 
