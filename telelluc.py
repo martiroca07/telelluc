@@ -451,8 +451,8 @@ def execute_shell_command(cmd_str):
 
                 # Format output with perfectly aligned columns
                 output_lines = []
-                output_lines.append("Name                               Size         Type")
-                output_lines.append("─" * 70)
+                output_lines.append("Name                               Size         Type      ")
+                output_lines.append("─" * 75)
 
                 for name, size_str, type_str in items:
                     # Truncate long names to fit column (40 chars max)
