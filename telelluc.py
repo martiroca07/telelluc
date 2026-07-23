@@ -375,7 +375,7 @@ def show_error():
 
 def format_size(bytes_size):
     if bytes_size < 1024:
-        return f"{bytes_size}B"
+        return f"{int(bytes_size)}B"
     elif bytes_size < 1024 * 1024:
         return f"{bytes_size / 1024:.1f}KB"
     elif bytes_size < 1024 * 1024 * 1024:
@@ -821,21 +821,30 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle mute command - silences audio
+        # Handle mute command - sets volume to 0% and toggles mute with PowerShell
         if cmd_lower == "mute":
             try:
                 nircmd_path = ensure_nircmd()
                 if not nircmd_path:
                     return "Error: Could not download nircmd"
-                result = subprocess.run(
+
+                # Set volume to 0% (silent level)
+                subprocess.run(
                     [nircmd_path, "setsysvolume", "0"],
                     capture_output=True,
                     timeout=5,
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
-                if result.returncode == 0:
-                    return "Audio: muted (volume 0%)"
-                return "Error: Failed to mute"
+
+                # Toggle mute using PowerShell (char 173 = mute key)
+                subprocess.run(
+                    ["powershell", "-command", "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+
+                return "Audio: muted (volume 0%)"
             except Exception as e:
                 return f"Error: {str(e)}"
 
