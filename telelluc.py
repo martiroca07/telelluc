@@ -412,6 +412,21 @@ def execute_shell_command(cmd_str):
         # Handle dir/ls command
         if cmd_lower.startswith("dir") or cmd_lower == "ls":
             try:
+                def get_dir_size(path):
+                    total = 0
+                    try:
+                        for entry in os.scandir(path):
+                            try:
+                                if entry.is_file():
+                                    total += entry.stat().st_size
+                                elif entry.is_dir():
+                                    total += get_dir_size(entry.path)
+                            except:
+                                pass
+                    except:
+                        pass
+                    return total
+
                 os.chdir(current_working_dir)
                 items = []
                 try:
@@ -419,7 +434,9 @@ def execute_shell_command(cmd_str):
                         full_path = os.path.join(current_working_dir, item)
                         try:
                             if os.path.isdir(full_path):
-                                items.append((item, "<DIR>", ""))
+                                dir_size = get_dir_size(full_path)
+                                size_str = format_size(dir_size)
+                                items.append((item, size_str, "[DIR]"))
                             else:
                                 size = os.path.getsize(full_path)
                                 size_str = format_size(size)
@@ -432,16 +449,19 @@ def execute_shell_command(cmd_str):
                 if not items:
                     return "Directory is empty"
 
-                # Format output with aligned columns and header
+                # Format output with perfectly aligned columns
                 output_lines = []
-                output_lines.append("Name                           Size       Type")
-                output_lines.append("─" * 60)
+                output_lines.append("Name                               Size         Type")
+                output_lines.append("─" * 70)
 
-                for name, size_type, _ in items:
-                    if size_type == "<DIR>":
-                        output_lines.append(f"{name:<30}  <DIR>")
+                for name, size_str, type_str in items:
+                    # Truncate long names to fit column (40 chars max)
+                    display_name = name if len(name) <= 40 else name[:37] + "..."
+
+                    if type_str == "[DIR]":
+                        output_lines.append(f"{display_name:<40}  {size_str:>10}  {type_str}")
                     else:
-                        output_lines.append(f"{name:<30}  {size_type:>9}")
+                        output_lines.append(f"{display_name:<40}  {size_str:>10}")
 
                 output = "\n".join(output_lines)
                 lines = output.split("\n")
@@ -756,14 +776,65 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle processes command
+        # Handle processes command - show only interesting/user processes
         if cmd_lower == "processes":
             try:
-                result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)
+                result = subprocess.run(["tasklist", "/v"], capture_output=True, text=True, timeout=10)
                 lines = result.stdout.strip().split("\n")
-                if len(lines) > 50:
-                    return "\n".join(lines[:50]) + f"\n... and {len(lines) - 50} more processes"
-                return result.stdout.strip()
+
+                # System processes to ignore
+                system_processes = {
+                    'svchost', 'csrss', 'lsass', 'services', 'system', 'registry', 'smss',
+                    'wininit', 'winlogon', 'dwm', 'fontdrvhost', 'idle', 'winlogon', 'explorer',
+                    'conhost', 'spoolsv', 'rundll32', 'taskhostw', 'dllhost', 'igfxcuiservice',
+                    'intelcpheciservice', 'intelcphdcpsvc', 'logonui', 'userinit', 'memory compression'
+                }
+
+                # Interesting processes (browsers, apps, etc.)
+                interesting_keywords = {
+                    'chrome', 'firefox', 'edge', 'opera', 'iexplore', 'safari', 'brave',
+                    'discord', 'telegram', 'slack', 'skype', 'teams', 'whatsapp',
+                    'spotify', 'vlc', 'audacity', 'winamp', 'foobar',
+                    'code', 'sublime', 'notepad++', 'atom', 'vim', 'emacs',
+                    'python', 'node', 'java', 'rust', 'golang',
+                    'game', 'steam', 'epic', 'origin', 'uplay',
+                    'visual studio', 'intellij', 'pycharm', 'rider',
+                    'blender', 'photoshop', 'illustrator', 'premiere', 'after effects',
+                    'obs', 'streamlabs', 'xsplit', 'twitch', 'youtube',
+                    'git', 'github', 'gitlab', 'docker', 'putty', 'winscp',
+                    '7zip', 'winrar', 'everything', 'totalcommander',
+                    'windows agent service', 'telelluc'
+                }
+
+                filtered_lines = [lines[0]]  # Header
+                filtered_lines.append(lines[1] if len(lines) > 1 else "")  # Separator
+
+                for line in lines[2:]:
+                    line_lower = line.lower()
+
+                    # Skip empty lines
+                    if not line.strip():
+                        continue
+
+                    # Check if process is in system ignore list
+                    is_system = any(proc in line_lower for proc in system_processes)
+
+                    # Check if process is interesting
+                    is_interesting = any(keyword in line_lower for keyword in interesting_keywords)
+
+                    # Include if interesting and not system
+                    if is_interesting and not is_system:
+                        filtered_lines.append(line)
+
+                if len(filtered_lines) <= 2:
+                    return "No interesting processes running"
+
+                # Format output nicely
+                output = "\n".join(filtered_lines[:50])
+                if len(filtered_lines) > 50:
+                    output += f"\n... and {len(filtered_lines) - 50} more processes"
+
+                return output
             except Exception as e:
                 return f"Error: {str(e)}"
 
