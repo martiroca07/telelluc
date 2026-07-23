@@ -994,9 +994,10 @@
                     print('start <file>      open file or program');
                     print('get <file>        download file (max 10MB)');
                     print('upload [path]     upload file to device (max 10MB)');
-                    print('max_audio         set volume to 100% (unmutes)');
+                    print('max_audio         set volume to 100%');
                     print('min_audio         set volume to 0% (muted)');
-                    print('mute              mute audio');
+                    print('mute              mute audio (volume 0%)');
+                    print('unmute            unmute audio (volume 50%)');
                     print('clear / cls       clear the screen');
                     print('help              show this help');
                     print('exit              exit control mode');
@@ -1309,6 +1310,15 @@
                     if (output) print(output, 'dim');
                 });
             },
+            unmute(args) {
+                if (!controlMode) {
+                    print('unmute command only available in control mode.', 'error');
+                    return;
+                }
+                sendRemoteCommand(activeDevice, 'unmute', (output) => {
+                    if (output) print(output, 'dim');
+                });
+            },
             logout() {
                 window.location.href = '/logout';
             }
@@ -1408,10 +1418,10 @@
             if (trimmed.length === 0) return;
 
             const [cmd, ...args] = trimmed.split(/\s+/);
-            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload', 'max_audio', 'min_audio', 'mute'];
+            const allowedControlCommands = ['cd', 'ls', 'exit', 'clear', 'cls', 'nano', 'delete', 'copy', 'paste', 'pwd', 'dir', 'help', 'cat', 'mkdir', 'move', 'mv', 'start', 'cut', 'get', 'upload', 'max_audio', 'min_audio', 'mute', 'unmute'];
 
             if (controlMode && !allowedControlCommands.includes(cmd.toLowerCase())) {
-                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, max_audio, min_audio, mute, clear, cls, help, exit`, 'error');
+                print(`Command not available in control mode. Available: cd, ls, pwd, cat, nano, delete, copy, cut, paste, mkdir, move, start, get, upload, max_audio, min_audio, mute, unmute, clear, cls, help, exit`, 'error');
                 return;
             }
 
@@ -1435,7 +1445,7 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'mute', 'help'];
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'mute', 'unmute', 'help'];
 
                 const parts = value.split(/\s+/);
                 const cmd = parts[0].toLowerCase();
@@ -1449,6 +1459,9 @@
 
                 if (cmd === 'cd') {
                     return cache.folders.filter(f => f.toLowerCase().startsWith(partial)).map(f => `cd ${f}`);
+                } else if (cmd === 'ls' || cmd === 'dir') {
+                    const allItems = [...cache.files, ...cache.folders];
+                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
                 } else if (cmd === 'nano') {
                     const allItems = [...cache.files, ...cache.folders];
                     return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `nano ${f}`);

