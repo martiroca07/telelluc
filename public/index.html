@@ -703,6 +703,39 @@
                     print('Self-delete failed.', 'error');
                 });
             },
+            rm(args) {
+                if (controlMode) {
+                    // In control mode: rm file/directory (handled by execute_shell_command)
+                    if (args.length === 0) {
+                        print('Usage: rm <filename>', 'dim');
+                        return;
+                    }
+                    const filename = args.join(' ');
+                    const cmd = `rm ${filename}`;
+                    sendRemoteCommand(activeDevice, cmd, (output) => {
+                        print(output);
+                    });
+                    return;
+                }
+                // Normal mode: rm deviceId (delete device from list)
+                if (args.length === 0) {
+                    print('Usage: rm <deviceId>', 'dim');
+                    print('Run "devices" to see available device IDs.', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                fetch(`/api/devices?deviceId=${deviceId}`, {
+                    method: 'DELETE'
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        print('Device deletion failed.', 'error');
+                        return;
+                    }
+                    print(`Device #${deviceId} deleted.`, 'dim');
+                }).catch(() => {
+                    print('Device deletion failed.', 'error');
+                });
+            },
             devices() {
                 fetch('/api/devices').then((resp) => {
                     if (!resp.ok) {
