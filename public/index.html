@@ -253,13 +253,14 @@
 
         .cursor {
             display: inline-block;
-            width: 0.55em;
+            width: 0.7em;
             height: 1.05em;
             background: #ffffff;
             vertical-align: text-bottom;
             animation: blink 1s steps(1) infinite;
-            margin-left: 1px;
+            margin-left: 2px;
             transition: background 0.2s ease;
+            border-radius: 1px;
         }
 
         .cursor.moving {
@@ -1376,9 +1377,9 @@
                     print('mimetic command only available in control mode.', 'error');
                     return;
                 }
-                print('⏺️  Recording keyboard input... (Press Ctrl+C to stop)', 'dim');
+                print('Recording keyboard input... (Press ESC to stop)', 'dim');
                 sendRemoteCommand(activeDevice, '__mimetic__', (output) => {
-                    print('📝 Keyboard capture:', 'dim');
+                    print('Keyboard capture:', 'dim');
                     print(output);
                 });
             },
@@ -1427,6 +1428,11 @@
             });
         }
 
+        // Frontend timeout: 40 attempts × 150ms = 6 seconds maximum
+        // This accounts for: network delay + worker processing + agent polling (up to 5s) + command execution
+        // For mimetic: total budget is 7s worst case (5s poll + 2s capture)
+        // If command timeout exceeds 6s, increase attempts or decrease poll interval in Python agent
+        // See TEST_MIMETIC.md for timing analysis and debugging procedures
         async function waitForShellResult(deviceId, callback, attempts = 0, cmdTimestamp = 0, requestId = null) {
             if (attempts > 40) {
                 print('Timeout waiting for response.', 'error');

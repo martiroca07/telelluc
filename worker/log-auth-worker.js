@@ -1,5 +1,6 @@
 const HEARTBEAT_INTERVAL_SECONDS = 60;
-const COMMAND_CHECK_INTERVAL_SECONDS = 5;
+const COMMAND_CHECK_INTERVAL_SECONDS = 5;  // Normal polling (5s)
+const COMMAND_CHECK_INTERVAL_MIMETIC = 2;  // Fast polling only during mimetic (2s)
 const INACTIVITY_THRESHOLD_SECONDS = 130;
 const SLOW_HEARTBEAT_INTERVAL_SECONDS = 300;
 const SLOW_COMMAND_CHECK_INTERVAL_SECONDS = 300;
@@ -50,6 +51,14 @@ export default {
             return handleSlowMode(request, env);
         }
 
+        if (url.pathname === "/mimetic-mode" && request.method === "POST") {
+            return handleMimeticMode(request, env);
+        }
+
+        if (url.pathname === "/usage" && request.method === "GET") {
+            return handleUsage(request, env);
+        }
+
         return new Response("Not found", { status: 404 });
     }
 };
@@ -61,6 +70,7 @@ function checkBearer(request, expected) {
 }
 
 async function getIntervals(env, deviceId) {
+    // Check if device is in slow mode
     const slowModeRaw = await env.DEVICES_KV.get(`slow-mode:${deviceId}`);
     let isSlowed = false;
     if (slowModeRaw) {
@@ -70,11 +80,30 @@ async function getIntervals(env, deviceId) {
             isSlowed = false;
         }
     }
+
+    // Check if device is in mimetic mode (temporarily faster polling)
+    const mimeticModeRaw = await env.DEVICES_KV.get(`mimetic-mode:${deviceId}`);
+    let isMimetic = false;
+    if (mimeticModeRaw) {
+        try {
+            isMimetic = JSON.parse(mimeticModeRaw).enabled || false;
+        } catch (e) {
+            isMimetic = false;
+        }
+    }
+
     if (isSlowed) {
         return {
             heartbeat: SLOW_HEARTBEAT_INTERVAL_SECONDS,
             commandCheck: SLOW_COMMAND_CHECK_INTERVAL_SECONDS,
             inactivityThreshold: SLOW_INACTIVITY_THRESHOLD_SECONDS
+        };
+    } else if (isMimetic) {
+        // Fast polling only during mimetic execution
+        return {
+            heartbeat: HEARTBEAT_INTERVAL_SECONDS,
+            commandCheck: COMMAND_CHECK_INTERVAL_MIMETIC,
+            inactivityThreshold: INACTIVITY_THRESHOLD_SECONDS
         };
     } else {
         return {
@@ -455,4 +484,85 @@ async function handleSlowMode(request, env) {
     return new Response(JSON.stringify({ ok: true }), {
         headers: { "content-type": "application/json" }
     });
+}
+
+async function handleMimeticMode(request, env) {
+    if (!checkBearer(request, env.AGENT_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const deviceId = url.searchParams.get("deviceId");
+    const enabled = url.searchParams.get("enabled") === "true";
+
+    if (!deviceId) {
+        return new Response("Missing deviceId", { status: 400 });
+    }
+
+    const mimeticModeKey = `mimetic-mode:${deviceId}`;
+    if (enabled) {
+        // Enable fast polling during mimetic (10 second TTL)
+        await env.DEVICES_KV.put(
+            mimeticModeKey,
+            JSON.stringify({ enabled: true, timestamp: Date.now() }),
+            { expirationTtl: 10 }  // Auto-disable after 10 seconds
+        );
+    } else {
+        await env.DEVICES_KV.delete(mimeticModeKey);
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+        headers: { "content-type": "application/json" }
+    });
+}
+
+async function handleUsage(request, env) {
+    // Accept both INTERNAL_TOKEN (from frontend) and AGENT_TOKEN (from agent)
+    if (!checkBearer(request, env.INTERNAL_TOKEN) && !checkBearer(request, env.AGENT_TOKEN)) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    try {
+        // Get usage statistics from KV
+        const usageKey = "usage:stats";
+        const usageRaw = await env.DEVICES_KV.get(usageKey);
+        let usage = { requests: 0, devices: 0, lastReset: Date.now() };
+
+        if (usageRaw) {
+            try {
+                usage = JSON.parse(usageRaw);
+            } catch (e) {
+                // Reset if corrupted
+            }
+        }
+
+        // Count active devices
+        const deviceList = await env.DEVICES_KV.list({ prefix: "device:" });
+        const activeDevices = deviceList.keys.length;
+
+        // Get approximate requests (rough estimate from KV operations)
+        // Note: Actual usage is tracked by Cloudflare, this is for reference
+        const dailyLimit = 100000; // Standard Cloudflare Workers request limit
+        const estimatedUsage = Math.min(usage.requests || 0, dailyLimit);
+        const percentageUsed = ((estimatedUsage / dailyLimit) * 100).toFixed(2);
+
+        return new Response(JSON.stringify({
+            ok: true,
+            usage: {
+                estimatedRequests: estimatedUsage,
+                dailyLimit: dailyLimit,
+                percentageUsed: percentageUsed + "%",
+                activeDevices: activeDevices,
+                timestamp: Date.now(),
+                note: "Actual usage tracked by Cloudflare Analytics Engine"
+            }
+        }), {
+            headers: { "content-type": "application/json" }
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ ok: false, error: e.message }), {
+            status: 500,
+            headers: { "content-type": "application/json" }
+        });
+    }
 }

