@@ -12,7 +12,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-VERSION = "0.0.85"
+VERSION = "0.0.90"
 
 def request_admin_privileges():
     try:
