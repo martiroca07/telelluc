@@ -1039,6 +1039,18 @@ def auto_compile():
         pass
 
 
+def get_version():
+    """Read version from file or return default."""
+    try:
+        version_file = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent", "version.txt")
+        if os.path.exists(version_file):
+            with open(version_file, "r") as f:
+                return f.read().strip()
+    except:
+        pass
+    return VERSION
+
+
 def heartbeat_loop():
     global device_id, last_command_time, current_heartbeat_interval, current_command_check_interval, current_inactivity_threshold
     hostname = socket.gethostname()
@@ -1054,7 +1066,7 @@ def heartbeat_loop():
                 "hostname": hostname,
                 "status": status,
                 "seconds_inactive": seconds_inactive if not is_active else 0,
-                "version": VERSION
+                "version": get_version()
             }).encode("utf-8")
 
             req = urllib.request.Request(
