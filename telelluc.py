@@ -524,9 +524,9 @@ def execute_shell_command(cmd_str):
                     full_path = os.path.abspath(os.path.join(current_working_dir, path))
                     if os.path.isdir(full_path):
                         current_working_dir = full_path
-                        os.chdir(current_working_dir)
                     else:
                         return f"Error: The system cannot find the path specified."
+                os.chdir(current_working_dir)
                 return current_working_dir
             except Exception as e:
                 return f"Error: {str(e)}"
