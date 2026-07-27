@@ -626,6 +626,9 @@
             clear() {
                 output.innerHTML = '';
             },
+            cls() {
+                output.innerHTML = '';  // Alias for clear
+            },
             language() {
                 lang = lang === 'en' ? 'es' : 'en';
                 print(t().langSwitched, 'dim');
