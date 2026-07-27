@@ -1087,21 +1087,6 @@
                     print(output);
                 });
             },
-            rm(args) {
-                if (!controlMode) {
-                    print('rm command only available in control mode.', 'error');
-                    return;
-                }
-                if (args.length === 0) {
-                    print('Usage: rm <filename>', 'dim');
-                    return;
-                }
-                const filename = args.join(' ');
-                const cmd = `rm ${filename}`;
-                sendRemoteCommand(activeDevice, cmd, (output) => {
-                    print(output);
-                });
-            },
             copy(args) {
                 if (!controlMode) {
                     print('copy command only available in control mode.', 'error');
