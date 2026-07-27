@@ -98,7 +98,6 @@ async function handleHeartbeat(request, env) {
     }
 
     const hostname = body && body.hostname ? String(body.hostname).slice(0, 100) : null;
-    const version = body && body.version ? String(body.version).slice(0, 20) : "unknown";
     if (!hostname) {
         return new Response("Missing hostname", { status: 400 });
     }
@@ -116,10 +115,9 @@ async function handleHeartbeat(request, env) {
         }
         record.ip = ip;
         record.lastSeen = Date.now();
-        record.version = version;
     } else {
         const id = await nextId(env);
-        record = { id, hostname, ip, lastSeen: Date.now(), version };
+        record = { id, hostname, ip, lastSeen: Date.now() };
     }
 
     await env.DEVICES_KV.put(key, JSON.stringify(record));

