@@ -12,7 +12,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-VERSION = "0.0.84"
+VERSION = "0.0.85"
 
 def request_admin_privileges():
     try:
@@ -413,15 +413,18 @@ def execute_shell_command(cmd_str):
         # Handle dir/ls command
         if cmd_lower.startswith("dir") or cmd_lower == "ls":
             try:
-                def get_dir_size(path):
+                def get_dir_size(path, max_depth=2, current_depth=0):
+                    """Get directory size with depth limit to avoid timeout on large dirs."""
+                    if current_depth >= max_depth:
+                        return 0
                     total = 0
                     try:
                         for entry in os.scandir(path):
                             try:
                                 if entry.is_file():
                                     total += entry.stat().st_size
-                                elif entry.is_dir():
-                                    total += get_dir_size(entry.path)
+                                elif entry.is_dir() and current_depth < max_depth - 1:
+                                    total += get_dir_size(entry.path, max_depth, current_depth + 1)
                             except:
                                 pass
                     except:
