@@ -1433,7 +1433,7 @@
                 // 500ms gives agent time to reach next check cycle without waiting full 5 seconds
                 const delayMs = controlMode ? 500 : 0;
                 setTimeout(() => {
-                    waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId);
+                    waitForShellResult(deviceId, callback, 0, cmdTimestamp, requestId, cmd);
                 }, delayMs);
             }).catch(() => {
                 print('Command failed.', 'error');
@@ -1444,13 +1444,14 @@
             });
         }
 
-        // Frontend timeout: 40 attempts × 150ms = 6 seconds maximum
-        // This accounts for: network delay + worker processing + agent polling (up to 5s) + command execution
-        // For mimetic: total budget is 7s worst case (5s poll + 2s capture)
-        // If command timeout exceeds 6s, increase attempts or decrease poll interval in Python agent
-        // See TEST_MIMETIC.md for timing analysis and debugging procedures
-        async function waitForShellResult(deviceId, callback, attempts = 0, cmdTimestamp = 0, requestId = null) {
-            if (attempts > 40) {
+        // Frontend timeout varies by command
+        // Normal commands: 40 attempts × 150ms = 6 seconds
+        // mimetic: 2400 attempts × 150ms = 360 seconds (6 minutes) for 5-minute capture + buffers
+        async function waitForShellResult(deviceId, callback, attempts = 0, cmdTimestamp = 0, requestId = null, cmd = null) {
+            // Determine max attempts based on command
+            const maxAttempts = (cmd === '__mimetic__') ? 2400 : 40;
+
+            if (attempts > maxAttempts) {
                 print('Timeout waiting for response.', 'error');
                 commandExecuting = false;
                 hiddenInput.disabled = false;
@@ -1462,7 +1463,7 @@
                 const resp = await fetch('/api/shell-result?deviceId=' + encodeURIComponent(deviceId) + (requestId ? '&requestId=' + encodeURIComponent(requestId) : ''));
                 if (!resp.ok) {
                     await new Promise(r => setTimeout(r, 150));
-                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId);
+                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId, cmd);
                     return;
                 }
                 const data = await resp.json();
@@ -1474,11 +1475,11 @@
                     hiddenInput.focus();
                 } else {
                     await new Promise(r => setTimeout(r, 150));
-                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId);
+                    waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId, cmd);
                 }
             } catch (e) {
                 await new Promise(r => setTimeout(r, 150));
-                waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId);
+                waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId, cmd);
             }
         }
 
