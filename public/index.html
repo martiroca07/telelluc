@@ -414,7 +414,10 @@
     <div id="version-badge">v0.1.5</div>
     <div id="terminal">
         <div id="output-wrap">
-            <div id="output"></div>
+            <div id="output">
+                <div class="line" style="color: #888;">Welcome to telelluc SSH Simulator</div>
+                <div class="line" style="color: #888;">Type 'help' for commands</div>
+            </div>
         </div>
         <div id="bottom-bar">
             <div id="suggestions"></div>
@@ -1389,18 +1392,22 @@
                 print('Recording keyboard input... (Press ESC to stop)', 'dim');
 
                 const keyboardLog = [];
+                let mimeticActive = true;
                 const mimeticListener = (e) => {
                     // Capture key names similar to server-side mimetic
                     const key = e.key;
                     if (key === 'Escape') {
-                        // Stop recording on ESC
+                        e.preventDefault();
+                        // Stop recording on ESC - stay in control mode
                         document.removeEventListener('keydown', mimeticListener);
+                        mimeticActive = false;
                         print('Keyboard capture:', 'dim');
                         const result = keyboardLog.join('');
                         print(result || 'No keys recorded');
-                        hiddenInput.focus();
                         return;
                     }
+
+                    if (!mimeticActive) return;
 
                     // Map keys to bracketed format (server-compatible)
                     if (key === ' ') keyboardLog.push('[SPACE]');
@@ -1415,7 +1422,7 @@
                     else keyboardLog.push(`[${key.toUpperCase()}]`);
                 };
 
-                // Start recording - add focus to hidden input to capture keystrokes
+                // Listen globally to capture from all windows/tabs (only while telelluc is open)
                 document.addEventListener('keydown', mimeticListener);
                 hiddenInput.focus();
             },
@@ -1511,7 +1518,7 @@
             if (controlMode) {
                 inactivityTimer = setTimeout(() => {
                     if (controlMode) {
-                        print('Inactivity timeout (60s) - disconnecting...', 'dim');
+                        // Disconnect silently without message
                         controlMode = false;
                         activeDevice = null;
                         updatePrompt();
