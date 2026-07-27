@@ -1503,7 +1503,7 @@
             const v = value.toLowerCase();
             if (!v) return [];
             if (controlMode) {
-                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'mute', 'unmute', 'help'];
+                const allowedControlCommands = ['cd', 'ls', 'pwd', 'exit', 'clear', 'cls', 'nano', 'delete', 'rm', 'dir', 'copy', 'cut', 'paste', 'mkdir', 'move', 'mv', 'cat', 'get', 'upload', 'start', 'max_audio', 'min_audio', 'mute', 'unmute', 'mimetic', 'help'];
 
                 const parts = value.split(/\s+/);
                 const cmd = parts[0].toLowerCase();
@@ -1517,21 +1517,13 @@
 
                 if (cmd === 'cd') {
                     return cache.folders.filter(f => f.toLowerCase().startsWith(partial)).map(f => `cd ${f}`);
-                } else if (cmd === 'ls' || cmd === 'dir') {
+                }
+
+                const fileCommands = ['ls', 'dir', 'nano', 'delete', 'rm', 'copy', 'cut', 'paste', 'get', 'cat', 'start', 'mkdir', 'move', 'mv', 'upload'];
+                if (fileCommands.includes(cmd)) {
                     const allItems = [...cache.files, ...cache.folders];
-                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
-                } else if (cmd === 'nano') {
-                    const allItems = [...cache.files, ...cache.folders];
-                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `nano ${f}`);
-                } else if (cmd === 'delete') {
-                    const allItems = [...cache.files, ...cache.folders];
-                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `delete ${f}`);
-                } else if (cmd === 'copy' || cmd === 'cut') {
-                    const allItems = [...cache.files, ...cache.folders];
-                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
-                } else if (cmd === 'get' || cmd === 'cat' || cmd === 'start') {
-                    const allItems = [...cache.files, ...cache.folders];
-                    return allItems.filter(f => f.toLowerCase().startsWith(partial)).map(f => `${cmd} ${f}`);
+                    const filtered = allItems.filter(f => f.toLowerCase().startsWith(partial)).slice(0, 15);
+                    return filtered.map(f => `${cmd} ${f}`);
                 }
 
                 return [];
