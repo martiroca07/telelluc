@@ -16,9 +16,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # cd /d C:\Users\User\Desktop\telelluc
 # python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
 
-
-
-
 VERSION = "0.0.92"
 
 def request_admin_privileges():
