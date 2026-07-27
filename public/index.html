@@ -414,10 +414,7 @@
     <div id="version-badge">v0.1.5</div>
     <div id="terminal">
         <div id="output-wrap">
-            <div id="output">
-                <div class="line" style="color: #888;">Welcome to telelluc SSH Simulator</div>
-                <div class="line" style="color: #888;">Type 'help' for commands</div>
-            </div>
+            <div id="output"></div>
         </div>
         <div id="bottom-bar">
             <div id="suggestions"></div>
@@ -454,7 +451,7 @@
         let commandExecuting = false;
         let fileCache = {};
         let inactivityTimer = null;
-        const INACTIVITY_TIMEOUT = 60000;  // 60 seconds
+        const INACTIVITY_TIMEOUT = 300000;  // 5 minutes
 
         const strings = {
             en: {
@@ -960,8 +957,12 @@
                     currentPath = 'C:\\Users';
                     updatePrompt();
                     startInactivityTimer();  // Start 60-second inactivity timer
-                    // Reset directory to default when entering control mode
-                    sendRemoteCommand(activeDevice, '__reset_dir__', () => {});
+                    // Reset directory to default silently (no response expected)
+                    fetch('/api/shell', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deviceId, payload: '__reset_dir__' })
+                    }).catch(() => {});
                     print(`Connected to ${device.hostname} (#${activeDevice}). Type "exit" to disconnect.`, 'dim');
                     print('Available commands: cd, ls, pwd, cat, nano, delete, mkdir, copy, cut, paste, move, start, get, upload, clear, help, exit, max_audio, min_audio, mute, unmute, mimetic', 'dim');
                 }).catch(() => {
