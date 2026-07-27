@@ -724,8 +724,10 @@
                     return;
                 }
                 const deviceId = args[0];
-                fetch(`/api/devices?deviceId=${deviceId}`, {
-                    method: 'DELETE'
+                fetch('/api/rm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId })
                 }).then((resp) => {
                     if (!resp.ok) {
                         print('Device deletion failed.', 'error');
