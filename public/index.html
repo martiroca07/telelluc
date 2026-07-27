@@ -255,10 +255,15 @@
             display: inline-block;
             width: 0.55em;
             height: 1.05em;
-            background: #00ff00;
+            background: #ffffff;
             vertical-align: text-bottom;
             animation: blink 1s steps(1) infinite;
             margin-left: 1px;
+            transition: background 0.2s ease;
+        }
+
+        .cursor.moving {
+            background: #00ff00;
         }
 
         @keyframes blink {
@@ -1493,7 +1498,29 @@
         }
 
         function refreshTyped() {
-            typed.textContent = hiddenInput.value;
+            const text = hiddenInput.value;
+            const cursorPos = hiddenInput.selectionStart;
+
+            // Mostrar texto antes del cursor + cursor + texto después del cursor
+            typed.innerHTML = '';
+            const beforeCursor = text.substring(0, cursorPos);
+            const afterCursor = text.substring(cursorPos);
+
+            if (beforeCursor) {
+                const beforeSpan = document.createElement('span');
+                beforeSpan.textContent = beforeCursor;
+                typed.appendChild(beforeSpan);
+            }
+
+            const cursorSpan = document.createElement('span');
+            cursorSpan.className = 'cursor';
+            typed.appendChild(cursorSpan);
+
+            if (afterCursor) {
+                const afterSpan = document.createElement('span');
+                afterSpan.textContent = afterCursor;
+                typed.appendChild(afterSpan);
+            }
         }
 
         let suggestions = [];
@@ -1602,6 +1629,15 @@
                 historyIndex = Math.min(history.length, historyIndex + 1);
                 hiddenInput.value = history[historyIndex] || '';
                 refreshTyped();
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                setTimeout(() => {
+                    refreshTyped();
+                    const cursorSpan = typed.querySelector('.cursor');
+                    if (cursorSpan) {
+                        cursorSpan.classList.add('moving');
+                        setTimeout(() => cursorSpan.classList.remove('moving'), 300);
+                    }
+                }, 0);
             } else if (e.key === 'Escape') {
                 suggestions = [];
                 renderSuggestions();
