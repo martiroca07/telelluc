@@ -1444,25 +1444,48 @@
                 input.type = 'file';
                 input.onchange = (e) => {
                     const file = e.target.files[0];
-                    if (!file) return;
+                    if (!file) {
+                        print('No file selected.', 'error');
+                        return;
+                    }
                     const reader = new FileReader();
+                    reader.onerror = () => {
+                        print('Failed to read file.', 'error');
+                    };
                     reader.onload = (event) => {
                         const base64 = event.target.result.split(',')[1];
+                        if (!base64) {
+                            print('Error: Could not encode file.', 'error');
+                            return;
+                        }
                         const filename = file.name;
+                        const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                         const payload = `__upload__|${destPath}/${filename}|${base64}`;
                         fetch('/api/shell', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ deviceId: activeDevice, payload })
+                            body: JSON.stringify({ deviceId: activeDevice, payload, requestId })
                         }).then(() => {
                             print(`Uploading: ${filename}...`, 'dim');
                             setTimeout(() => {
                                 waitForShellResult(activeDevice, (output) => {
-                                    print(output || `Uploaded: ${filename}`, 'dim');
-                                });
+                                    if (output && output.toLowerCase().includes('error')) {
+                                        print(output, 'error');
+                                    } else {
+                                        print(output || `Uploaded: ${filename}`, 'dim');
+                                    }
+                                    commandExecuting = false;
+                                    hiddenInput.disabled = false;
+                                    hiddenInput.style.opacity = '1';
+                                    hiddenInput.focus();
+                                }, 0, Date.now(), requestId, '__upload__');
                             }, 500);
                         }).catch(() => {
                             print('Upload failed.', 'error');
+                            commandExecuting = false;
+                            hiddenInput.disabled = false;
+                            hiddenInput.style.opacity = '1';
+                            hiddenInput.focus();
                         });
                     };
                     reader.readAsDataURL(file);
