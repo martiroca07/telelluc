@@ -583,6 +583,10 @@ const LOGIN_HTML = `<!DOCTYPE html>
 
         var loginStage = 'username';
         var pendingUsername = '';
+        var maxAttempts = 3;
+        var lockoutDuration = 20 * 60 * 1000; // 20 minutes
+        var lockoutKey = 'telelluc_lockout';
+        var attemptsKey = 'telelluc_failed_attempts';
 
         function loginPrint(text) {
             var div = document.createElement('div');
@@ -601,7 +605,78 @@ const LOGIN_HTML = `<!DOCTYPE html>
             setLoginPrompt('telelluc login: ');
         }
 
+        function isLockedOut() {
+            var lockoutTime = localStorage.getItem(lockoutKey);
+            if (!lockoutTime) return false;
+            var now = Date.now();
+            if (now < parseInt(lockoutTime, 10)) return true;
+            localStorage.removeItem(lockoutKey);
+            localStorage.removeItem(attemptsKey);
+            return false;
+        }
+
+        function getRemainingLockoutTime() {
+            var lockoutTime = localStorage.getItem(lockoutKey);
+            if (!lockoutTime) return 0;
+            var remaining = parseInt(lockoutTime, 10) - Date.now();
+            return Math.max(0, Math.ceil(remaining / 1000));
+        }
+
+        function lockAccount() {
+            var lockoutTime = Date.now() + lockoutDuration;
+            localStorage.setItem(lockoutKey, String(lockoutTime));
+        }
+
+        function incrementFailedAttempts() {
+            var attempts = parseInt(localStorage.getItem(attemptsKey) || '0', 10);
+            attempts += 1;
+            localStorage.setItem(attemptsKey, String(attempts));
+            return attempts;
+        }
+
+        function resetFailedAttempts() {
+            localStorage.removeItem(attemptsKey);
+        }
+
+        function showLockoutScreen() {
+            loginScreen.style.cursor = 'default';
+            hiddenInput.style.pointerEvents = 'none';
+            hiddenInput.disabled = true;
+            loginPromptLabel.textContent = '';
+            loginTyped.textContent = '';
+            loginOutput.textContent = '';
+
+            loginPrint('Too many failed login attempts.');
+            loginPrint('Account locked for 20 minutes.');
+            loginPrint('');
+
+            function updateCountdown() {
+                var remaining = getRemainingLockoutTime();
+                if (remaining <= 0) {
+                    loginOutput.textContent = '';
+                    resetLogin();
+                    hiddenInput.style.pointerEvents = 'auto';
+                    hiddenInput.disabled = false;
+                    loginScreen.style.cursor = 'text';
+                    hiddenInput.focus();
+                    return;
+                }
+                var mins = Math.floor(remaining / 60);
+                var secs = remaining % 60;
+                var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+                loginPrint('Time remaining: ' + timeStr);
+                setTimeout(updateCountdown, 1000);
+            }
+
+            updateCountdown();
+        }
+
         function handleLoginEnter(value) {
+            if (isLockedOut()) {
+                showLockoutScreen();
+                return;
+            }
+
             if (loginStage === 'username') {
                 pendingUsername = value;
                 loginTyped.textContent = '';
@@ -609,30 +684,57 @@ const LOGIN_HTML = `<!DOCTYPE html>
                 setLoginPrompt('Password: ');
                 return;
             }
+
             var password = value;
             loginTyped.textContent = '';
             setLoginPrompt('');
+
             fetch('/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user: pendingUsername, pass: password })
             }).then(function (resp) {
                 if (resp.ok) {
+                    resetFailedAttempts();
                     location.reload();
                     return;
                 }
+                var attempts = incrementFailedAttempts();
                 loginPrint('');
                 loginPrint('Login incorrect');
-                resetLogin();
+
+                if (attempts >= maxAttempts) {
+                    lockAccount();
+                    loginPrint('');
+                    showLockoutScreen();
+                } else {
+                    var remaining = maxAttempts - attempts;
+                    loginPrint('Attempts remaining: ' + remaining);
+                    resetLogin();
+                }
             }).catch(function () {
+                var attempts = incrementFailedAttempts();
                 loginPrint('');
                 loginPrint('Login incorrect');
-                resetLogin();
+
+                if (attempts >= maxAttempts) {
+                    lockAccount();
+                    loginPrint('');
+                    showLockoutScreen();
+                } else {
+                    var remaining = maxAttempts - attempts;
+                    loginPrint('Attempts remaining: ' + remaining);
+                    resetLogin();
+                }
             });
         }
 
         hiddenInput.addEventListener('input', function () {
-            loginTyped.textContent = loginStage === 'password' ? '' : hiddenInput.value;
+            if (loginStage === 'password') {
+                loginTyped.textContent = '';
+            } else {
+                loginTyped.textContent = hiddenInput.value;
+            }
         });
 
         hiddenInput.addEventListener('keydown', function (e) {
@@ -646,12 +748,18 @@ const LOGIN_HTML = `<!DOCTYPE html>
         });
 
         loginScreen.addEventListener('click', function () {
-            hiddenInput.focus();
+            if (!isLockedOut()) {
+                hiddenInput.focus();
+            }
         });
 
         window.addEventListener('load', function () {
-            hiddenInput.focus();
-            resetLogin();
+            if (isLockedOut()) {
+                showLockoutScreen();
+            } else {
+                hiddenInput.focus();
+                resetLogin();
+            }
         });
     </script>
 </body>
