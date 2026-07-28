@@ -472,6 +472,7 @@
                     'disk <deviceId>    show disk space usage',
                     'processes <deviceId>  list running processes',
                     'ipconfig <deviceId>  show network configuration',
+                    'taskkill <deviceId> <pid>  terminate a process',
                     'reset-id          reset device ID counter to 1',
                     'slow <deviceId>   reduce polling (5 min heartbeat, 6 min offline)',
                     'fast <deviceId>   restore normal polling (works from slow mode)',
@@ -923,6 +924,35 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId, payload: 'ipconfig' })
+                }).then(() => {
+                    setTimeout(() => {
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.result) print(d.result);
+                            });
+                    }, 500);
+                }).catch(() => {
+                    print('Command failed.', 'error');
+                });
+            },
+            taskkill(args) {
+                if (args.length < 2) {
+                    print('Usage: taskkill <deviceId> <pid>', 'dim');
+                    print('Terminate a process by PID on a remote device.', 'dim');
+                    print('Example: taskkill 1 12345', 'dim');
+                    return;
+                }
+                const deviceId = args[0];
+                const pid = args[1];
+                if (!/^\d+$/.test(pid)) {
+                    print('Error: PID must be a number.', 'error');
+                    return;
+                }
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId, payload: `taskkill ${deviceId} ${pid}` })
                 }).then(() => {
                     setTimeout(() => {
                         fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)

