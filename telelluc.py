@@ -930,12 +930,17 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle processes command - show running processes (filtered)
+        # Handle processes command - show running processes (main process only)
         if cmd_lower == "processes":
             try:
-                # Use CSV format for reliable parsing
-                result = subprocess.run(["tasklist", "/fo", "csv"], capture_output=True, text=True, timeout=15)
-                if not result.stdout:
+                # Execute tasklist twice for reliability (first attempt often fails)
+                result = None
+                for _ in range(2):
+                    result = subprocess.run(["tasklist", "/fo", "csv"], capture_output=True, text=True, timeout=15)
+                    if result.stdout and len(result.stdout.strip().split("\n")) > 2:
+                        break
+
+                if not result or not result.stdout:
                     return "No processes running"
 
                 lines = result.stdout.strip().split("\n")
@@ -962,8 +967,8 @@ def execute_shell_command(cmd_str):
                 output_lines = ["Image Name                     PID"]
                 output_lines.append("=================================================")
 
-                # Parse CSV (skip header line which is first line)
-                seen = set()
+                # Parse CSV - group by app and show only first (main process) of each
+                apps = {}
                 for line in lines[1:]:
                     line = line.strip()
                     if not line:
@@ -990,13 +995,13 @@ def execute_shell_command(cmd_str):
                     if not has_keyword:
                         continue
 
-                    # Avoid duplicates
-                    key = (name_lower, pid)
-                    if key in seen:
-                        continue
-                    seen.add(key)
+                    # Group by app name - keep only the first instance
+                    if name_lower not in apps:
+                        apps[name_lower] = (name, pid)
 
-                    # Format output
+                # Format output - sorted by app name
+                for app_name_lower in sorted(apps.keys()):
+                    name, pid = apps[app_name_lower]
                     output_lines.append(f"{name:<30} {pid}")
 
                 # Return output
