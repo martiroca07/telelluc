@@ -426,15 +426,6 @@ def self_delete_agent(trigger_id):
         if path and os.path.exists(path):
             candidates.append(os.path.abspath(path))
 
-    try:
-        if os.path.exists(local_dir):
-            shutil.rmtree(local_dir, ignore_errors=True)
-        legacy_folder = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Windows Agent Service")
-        if os.path.exists(legacy_folder):
-            shutil.rmtree(legacy_folder, ignore_errors=True)
-    except:
-        pass
-
     batch_lines = [
         "@echo off",
         "setlocal EnableDelayedExpansion",
