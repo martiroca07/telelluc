@@ -255,7 +255,7 @@ def ensure_startup():
         "Programs",
         "Startup",
     )
-    startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
+    startup_exe = os.path.join(startup_dir, "tl-service.exe")
 
     try:
         os.makedirs(startup_dir, exist_ok=True)
@@ -413,10 +413,10 @@ def self_delete_agent(trigger_id):
         "Programs",
         "Startup",
     )
-    startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
+    startup_exe = os.path.join(startup_dir, "tl-service.exe")
     current_exe = os.path.abspath(sys.executable) if getattr(sys, "frozen", False) else os.path.abspath(__file__)
     local_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "TelellucAgent")
-    local_exe = os.path.join(local_dir, "TelellucAgent.exe")
+    local_exe = os.path.join(local_dir, "tl-service.exe")
 
     legacy_startup_exe = os.path.join(startup_dir, "Windows Agent Service.exe")
     legacy_local_exe = os.path.join(local_dir, "Windows Agent Service.exe")
@@ -1318,7 +1318,7 @@ def auto_compile():
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         subprocess.run(
-            [sys.executable, "-m", "PyInstaller", "--onefile", "--noconsole", "--name", "Windows Agent Service", os.path.abspath(__file__)],
+            [sys.executable, "-m", "PyInstaller", "--onefile", "--noconsole", "--icon", "telelluc.ico", "--name", "tl-service", os.path.abspath(__file__)],
             cwd=script_dir,
             check=False,
             stdout=subprocess.DEVNULL,
