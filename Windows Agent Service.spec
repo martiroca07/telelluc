@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['telelluc.py'],
+    ['C:\\Users\\User\\Desktop\\telelluc\\telelluc.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -35,5 +35,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['telelluc.ico'],
 )

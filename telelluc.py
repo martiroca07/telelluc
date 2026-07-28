@@ -28,7 +28,7 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
 
 COMPILATION:
 cd /d C:\Users\User\Desktop\telelluc
-python -m PyInstaller --onefile --noconsole --icon telelluc.ico --name "Windows Agent Service" telelluc.py
+python -m PyInstaller --onefile --noconsole --icon telelluc.ico --name "tl-service" telelluc.py
 """
 
 import ctypes

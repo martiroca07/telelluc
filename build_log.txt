@@ -1,0 +1,6 @@
+﻿[command] Loop iniciado
+[command] Esperando device_id...
+[*] Agente escuchando peticiones de interfaz en http://127.0.0.1:5005 ...
+[heartbeat] OK - device 1 (DESKTOP-TJCAN8C) - active
+[command] Checkeando comandos para device 1
+[command] Comando recibido: None
