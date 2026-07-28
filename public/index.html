@@ -1423,9 +1423,47 @@
                     return;
                 }
                 print('Recording keyboard input... (Press ESC to stop)', 'dim');
-                sendRemoteCommand(activeDevice, '__mimetic__', (output) => {
-                    print('Keyboard capture:', 'dim');
-                    print(output);
+                print('Keyboard capture:', 'dim');
+
+                // Start mimetic capture
+                sendRemoteCommand(activeDevice, '__mimetic__', () => {
+                    // Start polling for partial results
+                    let lastOutput = '';
+                    const pollInterval = setInterval(() => {
+                        fetch('/api/shell', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ deviceId: activeDevice, payload: '__mimetic_get__' })
+                        }).then(() => {
+                            setTimeout(() => {
+                                fetch(`/api/shell-result?deviceId=${encodeURIComponent(activeDevice)}`)
+                                    .then(r => r.json())
+                                    .then(d => {
+                                        if (d.result) {
+                                            const output = d.result.trim();
+                                            // Show new output (exclude status line)
+                                            const lines = output.split('\n');
+                                            const statusLine = lines[lines.length - 1];
+                                            const captureOutput = lines.slice(0, -1).join('\n');
+
+                                            if (captureOutput && captureOutput !== lastOutput) {
+                                                print(captureOutput);
+                                                lastOutput = captureOutput;
+                                            }
+
+                                            // Check if finished
+                                            if (statusLine.includes('[FINISHED]')) {
+                                                clearInterval(pollInterval);
+                                                commandExecuting = false;
+                                                hiddenInput.disabled = false;
+                                                hiddenInput.style.opacity = '1';
+                                                hiddenInput.focus();
+                                            }
+                                        }
+                                    });
+                            }, 100);
+                        });
+                    }, 200);
                 });
             },
             logout() {

