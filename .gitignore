@@ -13,6 +13,14 @@ venv/
 build/
 dist/
 *.spec
+*.toc
+*.pyz
+*.pyd
+
+# PyInstaller generated files
+*.exe
+Windows Agent Service.exe
+base_library.zip
 
 # Temporary & Log Files
 *.log
