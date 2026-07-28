@@ -920,15 +920,38 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle disk command
-        if cmd_lower == "disk":
+        # Handle disk command (with optional disk number parameter)
+        if cmd_lower.startswith("disk"):
             try:
                 import shutil
-                total, used, free = shutil.disk_usage("/")
+                import string
+
+                # Parse optional disk parameter (e.g., "disk" or "disk 0" or "disk c")
+                parts = cmd_str.split()
+                disk_arg = parts[1].upper() if len(parts) > 1 else "C"
+
+                # Normalize to drive letter (0->C, 1->D, etc.)
+                if disk_arg.isdigit():
+                    disk_num = int(disk_arg)
+                    available_drives = [d for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+                    if disk_num >= len(available_drives):
+                        return f"Error: Disk {disk_num} does not exist. Available: {', '.join(available_drives)}"
+                    disk_letter = available_drives[disk_num]
+                else:
+                    disk_letter = disk_arg if len(disk_arg) == 1 else disk_arg[0]
+                    if not os.path.exists(f"{disk_letter}:\\"):
+                        return f"Error: Drive {disk_letter}:\\ does not exist"
+
+                path = f"{disk_letter}:\\"
+                total, used, free = shutil.disk_usage(path)
                 total_gb = total / (1024**3)
                 used_gb = used / (1024**3)
                 free_gb = free / (1024**3)
-                return f"Total: {total_gb:.2f}GB | Used: {used_gb:.2f}GB | Free: {free_gb:.2f}GB"
+
+                # Calculate percentage used
+                percent_used = (used_gb / total_gb * 100) if total_gb > 0 else 0
+
+                return f"{disk_letter}: | Total: {total_gb:.2f}GB | Used: {used_gb:.2f}GB | Free: {free_gb:.2f}GB ({percent_used:.1f}%)"
             except Exception as e:
                 return f"Error: {str(e)}"
 
