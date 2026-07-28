@@ -508,6 +508,8 @@ def execute_shell_command(cmd_str):
     global clipboard_cut
 
     try:
+        # Clean input - ensure no buffering issues between commands
+        cmd_str = cmd_str.strip().replace('\x00', '').replace('\r', '')
         cmd_lower = cmd_str.lower().strip()
 
         # Handle cd command
