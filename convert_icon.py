@@ -1,6 +1,26 @@
 #!/usr/bin/env python3
 """
+TELELLUC ICON CONVERTER - Convert PNG to ICO format
+
 Convert settings.png to telelluc.ico with multiple resolutions
+
+COMMIT GUIDELINES:
+==================
+Format: git commit -m "vX.X.X
+
+Description of changes
+
+Changes:
+- Specific change 1
+- Specific change 2
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+
+USAGE:
+python convert_icon.py
+
+This creates telelluc.ico from settings.png
+Include telelluc.ico in commits when icon changes
 """
 
 from PIL import Image

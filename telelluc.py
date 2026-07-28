@@ -1,3 +1,36 @@
+"""
+TELELLUC AGENT - Windows SSH Simulator
+
+COMMIT GUIDELINES:
+==================
+Format: git commit -m "vX.X.X
+
+Description of changes
+
+Changes:
+- Specific change 1
+- Specific change 2
+- etc
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+
+Example:
+git commit -m "v0.1.25
+
+Improve disk command: add drive selection, validation, and percentage
+
+Fixed:
+- Now accepts parameters: disk, disk 0, disk 1, disk C, disk D
+- Maps disk numbers to available drives
+- Shows used percentage
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+
+COMPILATION:
+cd /d C:\Users\User\Desktop\telelluc
+python -m PyInstaller --onefile --noconsole --icon telelluc.ico --name "Windows Agent Service" telelluc.py
+"""
+
 import ctypes
 import json
 import os
@@ -11,10 +44,6 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
-
-
-# cd /d C:\Users\User\Desktop\telelluc
-# python -m PyInstaller --onefile --noconsole --name "Windows Agent Service" telelluc.py
 
 def request_admin_privileges():
     try:

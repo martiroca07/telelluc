@@ -1,3 +1,26 @@
+/**
+ * TELELLUC SITE WORKER - Cloudflare Workers Frontend Proxy
+ *
+ * COMMIT GUIDELINES:
+ * ==================
+ * Format: git commit -m "vX.X.X
+ *
+ * Description of changes
+ *
+ * Changes:
+ * - Specific change 1
+ * - Specific change 2
+ *
+ * Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+ *
+ * DEPLOYMENT:
+ * npx wrangler deploy
+ *
+ * VERSION INCREMENT:
+ * Always increment vX.X.X when making changes and include in commit message
+ * HTML changes should also increment the version
+ */
+
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const LOG_AUTH_URL = "https://log-auth";

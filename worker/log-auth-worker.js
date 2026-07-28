@@ -1,3 +1,25 @@
+/**
+ * TELELLUC LOG-AUTH WORKER - Cloudflare Workers Backend
+ *
+ * COMMIT GUIDELINES:
+ * ==================
+ * Format: git commit -m "vX.X.X
+ *
+ * Description of changes
+ *
+ * Changes:
+ * - Specific change 1
+ * - Specific change 2
+ *
+ * Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+ *
+ * DEPLOYMENT:
+ * npx wrangler deploy -c wrangler-auth.toml
+ *
+ * VERSION INCREMENT:
+ * Always increment vX.X.X when making changes and include in commit message
+ */
+
 const HEARTBEAT_INTERVAL_SECONDS = 60;
 const COMMAND_CHECK_INTERVAL_SECONDS = 5;  // Normal polling (5s)
 const COMMAND_CHECK_INTERVAL_MIMETIC = 2;  // Fast polling only during mimetic (2s)

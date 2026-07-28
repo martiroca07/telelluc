@@ -1,6 +1,26 @@
 #!/usr/bin/env python3
 """
-Create a professional icon for telelluc Windows Agent Service EXE
+TELELLUC ICON GENERATOR - Create professional Windows Service icon
+
+Generate telelluc.ico from scratch with professional design
+
+COMMIT GUIDELINES:
+==================
+Format: git commit -m "vX.X.X
+
+Description of changes
+
+Changes:
+- Specific change 1
+- Specific change 2
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+
+USAGE:
+python create_icon.py
+
+This generates a new telelluc.ico with professional design
+Use convert_icon.py to convert existing settings.png instead
 """
 
 from PIL import Image, ImageDraw, ImageFont
