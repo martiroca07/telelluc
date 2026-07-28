@@ -217,11 +217,29 @@
         }
 
         @media (max-width: 768px) {
+            #suggestions {
+                flex-direction: column;
+                max-height: 50vh;
+                gap: 0;
+            }
+
             #suggestions .suggestion {
-                padding: 6px 10px;
-                min-height: 2em;
+                padding: 12px 10px;
+                min-height: 2.5em;
                 display: flex;
                 align-items: center;
+                border-bottom: 1px solid #2a2a2a;
+                border-radius: 0;
+                font-size: 1em;
+                width: 100%;
+            }
+
+            #suggestions .suggestion:last-child {
+                border-bottom: none;
+            }
+
+            #suggestions .suggestion.active {
+                background: #0052cc;
             }
         }
 
@@ -295,35 +313,74 @@
                 gap: 4px;
             }
 
-            #suggestions {
-                max-height: 40vh;
+            #output-wrap {
+                font-size: 14px;
+                line-height: 1.6;
+            }
+
+            #input-bar {
+                min-height: auto;
+            }
+
+            #input-line {
+                min-height: 2em;
             }
         }
 
         @media (max-width: 480px) {
             #corner-banner {
-                font-size: 7px;
-                top: 2px;
-                right: 8px;
+                display: none !important;
             }
 
             #output-wrap {
-                padding: 15px 8px 0;
-                font-size: 12px;
+                padding: 12px 8px 0;
+                font-size: 13px;
+                line-height: 1.5;
             }
 
             #input-bar {
-                padding: 8px 8px 10px;
+                padding: 8px 8px 12px;
+                min-height: auto;
             }
 
             .line {
-                font-size: 12px;
+                font-size: 13px;
+            }
+
+            #input-line {
+                min-height: 2.2em;
+                font-size: 13px;
+            }
+
+            #suggestions {
+                flex-direction: column;
+                max-height: 60vh;
+                bottom: 100% !important;
+                gap: 0;
+                padding: 0;
             }
 
             #suggestions .suggestion {
-                padding: 8px 12px;
-                min-height: 2.5em;
-                font-size: 13px;
+                padding: 14px 12px;
+                min-height: 3em;
+                font-size: 14px;
+                width: 100%;
+                border: none;
+                border-bottom: 1px solid #2a2a2a;
+                text-align: left;
+            }
+
+            #suggestions .suggestion:last-child {
+                border-bottom: none;
+            }
+
+            #suggestions .suggestion.active {
+                background: #0052cc;
+                border-bottom: 1px solid #2a2a2a;
+            }
+
+            #suggestions .suggestion:active {
+                background: #0052cc;
             }
         }
 
