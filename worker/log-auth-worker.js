@@ -1,6 +1,31 @@
 /**
  * TELELLUC LOG-AUTH WORKER - Cloudflare Workers Backend
  *
+ * CRITICAL ARCHITECTURE NOTES:
+ * =============================
+ * COMMAND STORAGE: KV key = "command:${deviceId}" (ONE command per device)
+ *   - Agent polls every 5 seconds to dequeue
+ *   - Frontend queues new command by overwriting old one (only 1 can be pending)
+ *   - This is INTENTIONAL - prevents command accumulation
+ *
+ * RESULT STORAGE: KV key = "command-result:${deviceId}" (ONE result per device)
+ *   - Agent stores result here after execution
+ *   - Frontend retrieves and IMMEDIATELY deletes
+ *   - Next command overwrites this slot (no contamination)
+ *   - TTL = 600 seconds (should delete before that)
+ *
+ * OUTPUT ISOLATION:
+ *   - Query commands (ipconfig, disk, sysinfo, processes, taskkill) use SIMPLE pattern
+ *   - Control commands (cd, ls, nano, etc) use requestId for multi-step isolation
+ *   - DO NOT mix patterns - query commands must NOT use requestId
+ *   - Simple pattern: last result wins, gets deleted immediately
+ *
+ * TIMEOUTS & RETRIES:
+ *   - Frontend retries: 80 attempts × 150ms = 12 seconds max
+ *   - Agent heartbeat: 60 seconds
+ *   - Inactivity threshold: 130 seconds (offline after 2+ missed heartbeats)
+ *   - If increasing timeout, verify agent can execute command in that time
+ *
  * COMMIT GUIDELINES:
  * ==================
  * Format: git commit -m "vX.X.X
@@ -15,9 +40,6 @@
  *
  * DEPLOYMENT:
  * npx wrangler deploy -c wrangler-auth.toml
- *
- * VERSION INCREMENT:
- * Always increment vX.X.X when making changes and include in commit message
  */
 
 const HEARTBEAT_INTERVAL_SECONDS = 60;
@@ -316,6 +338,7 @@ async function handleCommandDequeue(request, env) {
 }
 
 async function handleCommandResult(request, env) {
+    // Agent POSTs result here after executing command
     if (!checkBearer(request, env.AGENT_TOKEN)) {
         return new Response("Unauthorized", { status: 401 });
     }
@@ -335,6 +358,9 @@ async function handleCommandResult(request, env) {
         return new Response("Missing deviceId or result", { status: 400 });
     }
 
+    // IMPORTANT: Simple key with NO requestId
+    // This overwrites any previous result (intentional - prevents queued results)
+    // Frontend will delete immediately after retrieval
     const key = `command-result:${deviceId}`;
     await env.DEVICES_KV.put(key, JSON.stringify({ result, timestamp }), {
         expirationTtl: 600
@@ -346,6 +372,8 @@ async function handleCommandResult(request, env) {
 }
 
 async function handleGetCommandResult(request, env) {
+    // Frontend polls here repeatedly until result arrives
+    // CRITICAL: Delete IMMEDIATELY after returning (prevents output contamination)
     if (!checkBearer(request, env.INTERNAL_TOKEN)) {
         return new Response("Unauthorized", { status: 401 });
     }
@@ -359,12 +387,14 @@ async function handleGetCommandResult(request, env) {
     const key = `command-result:${deviceId}`;
     const raw = await env.DEVICES_KV.get(key);
     if (!raw) {
+        // Frontend retries when result is null (agent hasn't finished yet)
         return new Response(JSON.stringify({ result: null }), {
             headers: { "content-type": "application/json" }
         });
     }
 
     const data = JSON.parse(raw);
+    // CRITICAL: Delete immediately - prevents mixing with next command's output
     await env.DEVICES_KV.delete(key);
     return new Response(JSON.stringify(data), {
         headers: { "content-type": "application/json" }

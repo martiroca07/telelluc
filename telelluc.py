@@ -1,6 +1,30 @@
 r"""
 TELELLUC AGENT - Windows SSH Simulator
 
+ARCHITECTURE NOTES FOR FUTURE MAINTENANCE:
+===========================================
+
+CRITICAL DESIGN DECISIONS (DO NOT CHANGE WITHOUT TESTING):
+- Command queueing: Backend stores ONLY ONE command per device in KV (key: command:${deviceId})
+- Result storage: Backend stores ONLY ONE result per device (key: command-result:${deviceId})
+  * Overwrites previous result to prevent contamination
+  * Frontend deletes immediately after retrieval
+- Frontend retry logic: 80 attempts × 150ms = 12 second timeout (DO NOT REDUCE)
+  * Agent heartbeat is 60s, so needs long timeout for slow devices
+- Input locking: Frontend disables keyboard while waiting (prevents command queueing bugs)
+- Control mode uses requestId for isolation; query commands use simple last-result pattern
+
+IF ADDING NEW QUERY COMMANDS:
+- Use queryWithRetry(deviceId, payload) from frontend
+- DO NOT add requestId logic to query commands (only control mode uses it)
+- Test multiple commands in sequence to ensure no output contamination
+
+DEBUGGING COMMON ISSUES:
+- "No response from device": Check agent is running, heartbeat timeout not exceeded
+- Output contamination: Check that KV keys are simple (device:${deviceId}, not nested)
+- Input not responding: Check hiddenInput.disabled/focus() is called correctly
+- Timeout too short: Increase maxAttempts in queryWithRetry(), not the 150ms delay
+
 COMMIT GUIDELINES:
 ==================
 Format: git commit -m "vX.X.X
@@ -10,19 +34,6 @@ Description of changes
 Changes:
 - Specific change 1
 - Specific change 2
-- etc
-
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
-
-Example:
-git commit -m "v0.1.25
-
-Improve disk command: add drive selection, validation, and percentage
-
-Fixed:
-- Now accepts parameters: disk, disk 0, disk 1, disk C, disk D
-- Maps disk numbers to available drives
-- Shows used percentage
 
 Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
 
@@ -1426,6 +1437,9 @@ def command_check_loop():
                 print(f"[command] Ejecutando comando shell: {payload}", flush=True)
                 output = execute_shell_command(payload)
                 try:
+                    # IMPORTANT: Result is stored with simple key (device:${deviceId})
+                    # Backend will overwrite any previous result to prevent contamination
+                    # Frontend will delete immediately after retrieval
                     result_data = {
                         "deviceId": device_id,
                         "result": output,
