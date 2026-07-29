@@ -765,6 +765,8 @@
         }
 
         function queryWithRetry(deviceId, payload, maxAttempts = 80) {
+            hiddenInput.disabled = true;
+            hiddenInput.style.opacity = '0.5';
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -774,6 +776,9 @@
                 function retry() {
                     if (attempt >= maxAttempts) {
                         print('No response from device', 'error');
+                        hiddenInput.disabled = false;
+                        hiddenInput.style.opacity = '1';
+                        hiddenInput.focus();
                         return;
                     }
                     fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
@@ -781,6 +786,9 @@
                         .then(d => {
                             if (d.result) {
                                 print(d.result);
+                                hiddenInput.disabled = false;
+                                hiddenInput.style.opacity = '1';
+                                hiddenInput.focus();
                             } else {
                                 attempt++;
                                 setTimeout(retry, 150);
@@ -794,6 +802,9 @@
                 retry();
             }).catch(() => {
                 print('Command failed.', 'error');
+                hiddenInput.disabled = false;
+                hiddenInput.style.opacity = '1';
+                hiddenInput.focus();
             });
         }
 
