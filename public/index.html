@@ -621,8 +621,8 @@
         // REASON: Prevents orphaned sessions when browser is refreshed
         // INCIDENT: User refreshes page, control mode session stays active on server
         // CONSEQUENCE: Old working directory state remains, confuses user
-        // SOLUTION: Auto-disconnect after 20s of no commands (unless mimetic running)
-        const INACTIVITY_TIMEOUT = 20000;  // 20 seconds
+        // SOLUTION: Auto-disconnect after 60s of no commands (unless mimetic running)
+        const INACTIVITY_TIMEOUT = 60000;  // 60 seconds (1 minute)
 
         const strings = {
             en: {
