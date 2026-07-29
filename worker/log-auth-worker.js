@@ -352,16 +352,17 @@ async function handleCommandResult(request, env) {
 
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
     const result = body && body.result ? body.result : null;
+    const requestId = body && body.requestId ? String(body.requestId) : null;
     const timestamp = body && body.timestamp ? body.timestamp : Date.now();
 
     if (!deviceId || !result) {
         return new Response("Missing deviceId or result", { status: 400 });
     }
 
-    // IMPORTANT: Simple key with NO requestId
-    // This overwrites any previous result (intentional - prevents queued results)
-    // Frontend will delete immediately after retrieval
-    const key = `command-result:${deviceId}`;
+    // Support both patterns:
+    // - Control mode (with requestId): command-result:${deviceId}:${requestId}
+    // - Query commands (without requestId): command-result:${deviceId}
+    const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
     await env.DEVICES_KV.put(key, JSON.stringify({ result, timestamp }), {
         expirationTtl: 600
     });
@@ -380,11 +381,15 @@ async function handleGetCommandResult(request, env) {
 
     const url = new URL(request.url);
     const deviceId = url.searchParams.get("deviceId");
+    const requestId = url.searchParams.get("requestId");
     if (!deviceId) {
         return new Response("Missing deviceId", { status: 400 });
     }
 
-    const key = `command-result:${deviceId}`;
+    // Support both patterns:
+    // - Control mode (with requestId): command-result:${deviceId}:${requestId}
+    // - Query commands (without requestId): command-result:${deviceId}
+    const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
     const raw = await env.DEVICES_KV.get(key);
     if (!raw) {
         // Frontend retries when result is null (agent hasn't finished yet)
