@@ -153,7 +153,7 @@ async function handleHeartbeat(request, env) {
         return new Response("Missing hostname", { status: 400 });
     }
 
-    // ANONYMOUS MODE: Do not store or log IP addresses or client origin data
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
     const key = `device:${hostname}`;
 
     const existingRaw = await env.DEVICES_KV.get(key);
@@ -164,12 +164,11 @@ async function handleHeartbeat(request, env) {
         } catch (e) {
             record = {};
         }
-        // Do not store IP information
+        record.ip = ip;
         record.lastSeen = Date.now();
     } else {
         const id = await nextId(env);
-        // Only store essential non-identifying information
-        record = { id, hostname, lastSeen: Date.now() };
+        record = { id, hostname, ip, lastSeen: Date.now() };
     }
 
     await env.DEVICES_KV.put(key, JSON.stringify(record));
@@ -227,7 +226,7 @@ async function handleDevices(request, env) {
         devices.push({
             id: record.id,
             hostname: record.hostname,
-            // IP information removed for anonymous operation
+            ip: record.ip || "unknown",
             lastSeen: record.lastSeen,
             online,
             status
