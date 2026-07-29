@@ -1000,30 +1000,20 @@
                     return;
                 }
                 const deviceId = args[0];
-                const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'sysinfo', requestId })
-                }).then((resp) => {
-                    if (!resp.ok) {
-                        print('Sysinfo command failed.', 'error');
-                        return;
-                    }
+                    body: JSON.stringify({ deviceId, payload: 'sysinfo' })
+                }).then(() => {
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}&requestId=${encodeURIComponent(requestId)}`)
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
                             .then(r => r.json())
                             .then(d => {
-                                if (d.result) {
-                                    print(d.result);
-                                } else {
-                                    print('No response from device.', 'error');
-                                }
-                            })
-                            .catch(e => print('Error fetching result.', 'error'));
+                                if (d.result) print(d.result);
+                            });
                     }, 500);
                 }).catch(() => {
-                    print('Sysinfo command failed.', 'error');
+                    print('Command failed.', 'error');
                 });
             },
             disk(args) {
@@ -1033,30 +1023,20 @@
                     return;
                 }
                 const deviceId = args[0];
-                const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'disk', requestId })
-                }).then((resp) => {
-                    if (!resp.ok) {
-                        print('Disk command failed.', 'error');
-                        return;
-                    }
+                    body: JSON.stringify({ deviceId, payload: 'disk' })
+                }).then(() => {
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}&requestId=${encodeURIComponent(requestId)}`)
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
                             .then(r => r.json())
                             .then(d => {
-                                if (d.result) {
-                                    print(d.result, 'dim');
-                                } else {
-                                    print('No response from device.', 'error');
-                                }
-                            })
-                            .catch(e => print('Error fetching result.', 'error'));
+                                if (d.result) print(d.result, 'dim');
+                            });
                     }, 500);
                 }).catch(() => {
-                    print('Disk command failed.', 'error');
+                    print('Command failed.', 'error');
                 });
             },
             processes(args) {
@@ -1066,30 +1046,20 @@
                     return;
                 }
                 const deviceId = args[0];
-                const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'processes', requestId })
-                }).then((resp) => {
-                    if (!resp.ok) {
-                        print('Processes command failed.', 'error');
-                        return;
-                    }
+                    body: JSON.stringify({ deviceId, payload: 'processes' })
+                }).then(() => {
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}&requestId=${encodeURIComponent(requestId)}`)
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
                             .then(r => r.json())
                             .then(d => {
-                                if (d.result) {
-                                    print(d.result);
-                                } else {
-                                    print('No response from device.', 'error');
-                                }
-                            })
-                            .catch(e => print('Error fetching result.', 'error'));
+                                if (d.result) print(d.result);
+                            });
                     }, 500);
                 }).catch(() => {
-                    print('Processes command failed.', 'error');
+                    print('Command failed.', 'error');
                 });
             },
             ipconfig(args) {
@@ -1099,30 +1069,20 @@
                     return;
                 }
                 const deviceId = args[0];
-                const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'ipconfig', requestId })
-                }).then((resp) => {
-                    if (!resp.ok) {
-                        print('Ipconfig command failed.', 'error');
-                        return;
-                    }
+                    body: JSON.stringify({ deviceId, payload: 'ipconfig' })
+                }).then(() => {
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}&requestId=${encodeURIComponent(requestId)}`)
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
                             .then(r => r.json())
                             .then(d => {
-                                if (d.result) {
-                                    print(d.result);
-                                } else {
-                                    print('No response from device.', 'error');
-                                }
-                            })
-                            .catch(e => print('Error fetching result.', 'error'));
+                                if (d.result) print(d.result);
+                            });
                     }, 500);
                 }).catch(() => {
-                    print('Ipconfig command failed.', 'error');
+                    print('Command failed.', 'error');
                 });
             },
             taskkill(args) {
@@ -1138,30 +1098,20 @@
                     print('Error: PID must be a number.', 'error');
                     return;
                 }
-                const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: `taskkill ${deviceId} ${pid}`, requestId })
-                }).then((resp) => {
-                    if (!resp.ok) {
-                        print('Taskkill command failed.', 'error');
-                        return;
-                    }
+                    body: JSON.stringify({ deviceId, payload: `taskkill ${deviceId} ${pid}` })
+                }).then(() => {
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}&requestId=${encodeURIComponent(requestId)}`)
+                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
                             .then(r => r.json())
                             .then(d => {
-                                if (d.result) {
-                                    print(d.result);
-                                } else {
-                                    print('No response from device.', 'error');
-                                }
-                            })
-                            .catch(e => print('Error fetching result.', 'error'));
+                                if (d.result) print(d.result);
+                            });
                     }, 500);
                 }).catch(() => {
-                    print('Taskkill command failed.', 'error');
+                    print('Command failed.', 'error');
                 });
             },
             control(args) {
