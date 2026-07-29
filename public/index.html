@@ -764,7 +764,14 @@
             return lang === 'es' ? `hace ${d}d` : `${d}d ago`;
         }
 
+        // ⚠️ DO NOT TOUCH: queryWithRetry function
+        // REASON: v0.1.50 added automatic retries to fix timeouts
+        // INCIDENT: Query commands timed out before agent could execute
+        // TIMEOUT MATH: 80 attempts × 150ms = 12 seconds (must match agent execution time)
         function queryWithRetry(deviceId, payload, maxAttempts = 80) {
+            // ⚠️ DO NOT TOUCH: Input locking
+            // REASON: v0.1.51 added this to prevent command queueing bugs
+            // INCIDENT: User could type during waiting, causing multiple commands to queue
             hiddenInput.disabled = true;
             hiddenInput.style.opacity = '0.5';
             fetch('/api/shell', {
@@ -774,6 +781,9 @@
             }).then(() => {
                 let attempt = 0;
                 function retry() {
+                    // ⚠️ DO NOT TOUCH: maxAttempts = 80
+                    // REASON: v0.1.47 set this as working timeout value
+                    // INCIDENT: Lower values caused timeouts; higher waste resources
                     if (attempt >= maxAttempts) {
                         print('No response from device', 'error');
                         hiddenInput.disabled = false;
@@ -791,6 +801,10 @@
                                 hiddenInput.focus();
                             } else {
                                 attempt++;
+                                // ⚠️ DO NOT TOUCH: 150ms delay between retries
+                                // REASON: v0.1.47 calculated this for agent heartbeat cycle
+                                // MATH: Agent checks every 5 seconds, 150ms gap = 80 attempts = 12s total
+                                // INCIDENT: If reduced, timeout happens before agent dequeues
                                 setTimeout(retry, 150);
                             }
                         })
@@ -1579,12 +1593,19 @@
 
         const commandNames = Object.keys(commands).sort();
 
+        // ⚠️ DO NOT TOUCH: sendRemoteCommand function (Control Mode)
+        // REASON: Uses requestId isolation pattern (different from queryWithRetry)
+        // INCIDENT: v0.1.49 tried to merge both patterns, broke both
+        // PATTERN: Control mode REQUIRES requestId for multi-step command isolation
         function sendRemoteCommand(deviceId, cmd, callback) {
             resetInactivityTimer();  // Reset timeout when command is executed
             commandExecuting = true;
             hiddenInput.disabled = true;
             hiddenInput.style.opacity = '0.5';
             const cmdTimestamp = Date.now();
+            // ⚠️ DO NOT TOUCH: requestId generation in control mode
+            // REASON: v0.1.53 confirmed this is required for control commands
+            // INCIDENT: Without requestId, control mode results contaminate query commands
             const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             fetch('/api/shell', {
                 method: 'POST',

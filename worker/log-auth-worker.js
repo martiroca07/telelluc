@@ -359,10 +359,18 @@ async function handleCommandResult(request, env) {
         return new Response("Missing deviceId or result", { status: 400 });
     }
 
+    // ⚠️ DO NOT TOUCH: KV Key Generation Logic
+    // REASON: v0.1.50 removed requestId logic and broke control mode (ls, cd, etc)
+    // INCIDENT: Control commands timed out while query commands worked
     // Support both patterns:
     // - Control mode (with requestId): command-result:${deviceId}:${requestId}
     // - Query commands (without requestId): command-result:${deviceId}
     const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
+
+    // ⚠️ DO NOT TOUCH: requestId in JSON payload
+    // REASON: v0.1.54 removed it and control mode couldn't match results
+    // INCIDENT: ls, cd showed timeout despite agent executing successfully
+    // Frontend validates response contains correct requestId
     await env.DEVICES_KV.put(key, JSON.stringify({ result, requestId, timestamp }), {
         expirationTtl: 600
     });
@@ -399,7 +407,10 @@ async function handleGetCommandResult(request, env) {
     }
 
     const data = JSON.parse(raw);
-    // CRITICAL: Delete immediately - prevents mixing with next command's output
+    // ⚠️ DO NOT TOUCH: Immediate deletion after retrieval
+    // REASON: v0.1.50 changed result storage to simple key, output contamination occurred
+    // INCIDENT: Running "disk 1" followed by "ipconfig 1" mixed their outputs
+    // DELETE IMMEDIATELY: Prevents next command from seeing previous result
     await env.DEVICES_KV.delete(key);
     return new Response(JSON.stringify(data), {
         headers: { "content-type": "application/json" }
