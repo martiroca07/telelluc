@@ -1697,11 +1697,11 @@
         }
 
         // Frontend timeout varies by command
-        // Normal commands: 40 attempts × 150ms = 6 seconds
+        // Normal commands: 80 attempts × 150ms = 12 seconds
         // mimetic: 2400 attempts × 150ms = 360 seconds (6 minutes) for 5-minute capture + buffers
         async function waitForShellResult(deviceId, callback, attempts = 0, cmdTimestamp = 0, requestId = null, cmd = null) {
             // Determine max attempts based on command
-            const maxAttempts = (cmd === '__mimetic__') ? 2400 : 40;
+            const maxAttempts = (cmd === '__mimetic__') ? 2400 : 80;
 
             if (attempts > maxAttempts) {
                 print('Timeout waiting for response.', 'error');
