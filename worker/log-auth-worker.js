@@ -324,15 +324,21 @@ async function handleCommandDequeue(request, env) {
     }
 
     await env.DEVICES_KV.delete(key);
-    return new Response(JSON.stringify({
+    // ⚠️ DO NOT CHANGE: Only include requestId if it exists
+    // REASON: Python's "if requestId:" check fails on empty string ""
+    // INCIDENT: v0.1.56 returned "" instead of omitting requestId, breaking isolation
+    const response = {
         command: cmd.command,
         cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1,
         payload: cmd.payload || "",
-        requestId: cmd.requestId || "",
         heartbeat: intervals.heartbeat,
         commandCheck: intervals.commandCheck,
         inactivityThreshold: intervals.inactivityThreshold
-    }), {
+    };
+    if (cmd.requestId) {
+        response.requestId = cmd.requestId;
+    }
+    return new Response(JSON.stringify(response), {
         headers: { "content-type": "application/json" }
     });
 }
