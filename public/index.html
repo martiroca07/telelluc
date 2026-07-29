@@ -600,6 +600,23 @@
         let commandExecuting = false;
         let fileCache = {};
         let inactivityTimer = null;
+
+        // Clean up orphaned control sessions on page reload
+        const wasInControlMode = sessionStorage.getItem('controlMode');
+        const controlModeDevice = sessionStorage.getItem('controlModeDevice');
+        if (wasInControlMode === 'true' && controlModeDevice) {
+            // Page was refreshed while in control mode
+            // Execute exit command to clean up server session
+            sessionStorage.removeItem('controlMode');
+            sessionStorage.removeItem('controlModeDevice');
+            setTimeout(() => {
+                fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId: controlModeDevice, payload: 'exit' })
+                }).catch(() => {});
+            }, 100);
+        }
         // ⚠️ DO NOT TOUCH: INACTIVITY_TIMEOUT for control mode
         // REASON: Prevents orphaned sessions when browser is refreshed
         // INCIDENT: User refreshes page, control mode session stays active on server
@@ -1127,9 +1144,11 @@
                     activeDevice = deviceId;
                     activeDeviceHostname = device.hostname;
                     controlMode = true;
+                    sessionStorage.setItem('controlMode', 'true');
+                    sessionStorage.setItem('controlModeDevice', deviceId);
                     currentPath = 'C:\\Users';
                     updatePrompt();
-                    startInactivityTimer();  // Start 60-second inactivity timer
+                    startInactivityTimer();  // Start inactivity timer
                     // Reset directory to default silently (no response expected)
                     fetch('/api/shell', {
                         method: 'POST',
@@ -1204,6 +1223,8 @@
             exit(args) {
                 stopInactivityTimer();  // Stop the inactivity timer
                 controlMode = false;
+                sessionStorage.removeItem('controlMode');
+                sessionStorage.removeItem('controlModeDevice');
                 activeDevice = null;
                 activeDeviceHostname = null;
                 currentPath = 'C:\\Users';
@@ -1696,6 +1717,8 @@
                     if (controlMode) {
                         // Disconnect silently without message
                         controlMode = false;
+                        sessionStorage.removeItem('controlMode');
+                        sessionStorage.removeItem('controlModeDevice');
                         activeDevice = null;
                         updatePrompt();
                     }
