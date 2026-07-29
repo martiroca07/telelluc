@@ -207,29 +207,16 @@ async function handleDevices(request, env) {
 
         const slowModeRaw = await env.DEVICES_KV.get(`slow-mode:${record.id}`);
         const isSlowed = slowModeRaw ? JSON.parse(slowModeRaw).enabled : false;
-
-        // In slow mode: 2 heartbeats = 300s * 2 = 600s (10 minutes)
-        // In normal mode: grace period = 130s
-        const thresholdMs = isSlowed ? 600 * 1000 : ONLINE_GRACE_PERIOD_MS;
+        const thresholdMs = isSlowed ? 360 * 1000 : ONLINE_GRACE_PERIOD_MS;
         const online = ageMs < thresholdMs;
-
-        // Status: show actual state, not just slow mode label
-        let status;
-        if (online) {
-            status = isSlowed ? 'slowed' : 'online';
-        } else {
-            // Offline - calculate inactivity time
-            const inactiveSeconds = Math.floor(ageMs / 1000);
-            status = `offline (${inactiveSeconds}s)`;
-        }
 
         devices.push({
             id: record.id,
             hostname: record.hostname,
-            ip: record.ip || "unknown",
+            ip: record.ip,
             lastSeen: record.lastSeen,
             online,
-            status
+            status: isSlowed ? 'slowed' : (online ? 'online' : 'offline')
         });
     }
     devices.sort((a, b) => a.id - b.id);
