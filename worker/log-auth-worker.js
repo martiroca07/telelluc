@@ -363,7 +363,7 @@ async function handleCommandResult(request, env) {
     // - Control mode (with requestId): command-result:${deviceId}:${requestId}
     // - Query commands (without requestId): command-result:${deviceId}
     const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
-    await env.DEVICES_KV.put(key, JSON.stringify({ result, timestamp }), {
+    await env.DEVICES_KV.put(key, JSON.stringify({ result, requestId, timestamp }), {
         expirationTtl: 600
     });
 
