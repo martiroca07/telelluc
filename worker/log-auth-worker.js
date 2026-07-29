@@ -241,7 +241,7 @@ async function handleCommandQueue(request, env) {
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
     const command = body && body.command ? String(body.command) : null;
     const payload = body && body.payload ? String(body.payload) : null;
-    let requestId = body && body.requestId ? String(body.requestId) : null;
+    const requestId = body && body.requestId ? String(body.requestId) : null;
     const cantidadRaw = body && (body.cantidad ?? body.amount ?? body.qty);
     const cantidad = Number.isFinite(Number(cantidadRaw))
         ? Math.max(1, Math.floor(Number(cantidadRaw)))
@@ -251,17 +251,12 @@ async function handleCommandQueue(request, env) {
         return new Response("Missing deviceId or command", { status: 400 });
     }
 
-    // Generate requestId if not provided (ensures unique command isolation)
-    if (!requestId) {
-        requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-
     const key = `command:${deviceId}`;
     await env.DEVICES_KV.put(key, JSON.stringify({ command, cantidad, payload, requestId, timestamp: Date.now() }), {
         expirationTtl: 300
     });
 
-    return new Response(JSON.stringify({ ok: true, requestId }), {
+    return new Response(JSON.stringify({ ok: true }), {
         headers: { "content-type": "application/json" }
     });
 }
@@ -334,15 +329,14 @@ async function handleCommandResult(request, env) {
 
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
     const result = body && body.result ? body.result : null;
-    const requestId = body && body.requestId ? String(body.requestId) : null;
     const timestamp = body && body.timestamp ? body.timestamp : Date.now();
 
     if (!deviceId || !result) {
         return new Response("Missing deviceId or result", { status: 400 });
     }
 
-    const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
-    await env.DEVICES_KV.put(key, JSON.stringify({ result, requestId, timestamp }), {
+    const key = `command-result:${deviceId}`;
+    await env.DEVICES_KV.put(key, JSON.stringify({ result, timestamp }), {
         expirationTtl: 600
     });
 
@@ -358,12 +352,11 @@ async function handleGetCommandResult(request, env) {
 
     const url = new URL(request.url);
     const deviceId = url.searchParams.get("deviceId");
-    const requestId = url.searchParams.get("requestId");
     if (!deviceId) {
         return new Response("Missing deviceId", { status: 400 });
     }
 
-    const key = requestId ? `command-result:${deviceId}:${requestId}` : `command-result:${deviceId}`;
+    const key = `command-result:${deviceId}`;
     const raw = await env.DEVICES_KV.get(key);
     if (!raw) {
         return new Response(JSON.stringify({ result: null }), {

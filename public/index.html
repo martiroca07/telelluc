@@ -764,6 +764,39 @@
             return lang === 'es' ? `hace ${d}d` : `${d}d ago`;
         }
 
+        function queryWithRetry(deviceId, payload, maxAttempts = 80) {
+            fetch('/api/shell', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId, payload })
+            }).then(() => {
+                let attempt = 0;
+                function retry() {
+                    if (attempt >= maxAttempts) {
+                        print('No response from device', 'error');
+                        return;
+                    }
+                    fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.result) {
+                                print(d.result);
+                            } else {
+                                attempt++;
+                                setTimeout(retry, 150);
+                            }
+                        })
+                        .catch(() => {
+                            attempt++;
+                            setTimeout(retry, 150);
+                        });
+                }
+                retry();
+            }).catch(() => {
+                print('Command failed.', 'error');
+            });
+        }
+
         const commands = {
             help() {
                 print(t().helpHeader);
@@ -999,25 +1032,7 @@
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
-                const deviceId = args[0];
-                fetch('/api/shell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'sysinfo' })
-                }).then(r => r.json()).then(resp => {
-                    const requestId = resp.requestId;
-                    setTimeout(() => {
-                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
-                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
-                        fetch(url)
-                            .then(r => r.json())
-                            .then(d => {
-                                if (d.result) print(d.result);
-                            });
-                    }, 500);
-                }).catch(() => {
-                    print('Command failed.', 'error');
-                });
+                queryWithRetry(args[0], 'sysinfo');
             },
             disk(args) {
                 if (args.length === 0) {
@@ -1025,25 +1040,7 @@
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
-                const deviceId = args[0];
-                fetch('/api/shell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'disk' })
-                }).then(r => r.json()).then(resp => {
-                    const requestId = resp.requestId;
-                    setTimeout(() => {
-                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
-                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
-                        fetch(url)
-                            .then(r => r.json())
-                            .then(d => {
-                                if (d.result) print(d.result, 'dim');
-                            });
-                    }, 500);
-                }).catch(() => {
-                    print('Command failed.', 'error');
-                });
+                queryWithRetry(args[0], 'disk');
             },
             processes(args) {
                 if (args.length === 0) {
@@ -1051,25 +1048,7 @@
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
-                const deviceId = args[0];
-                fetch('/api/shell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'processes' })
-                }).then(r => r.json()).then(resp => {
-                    const requestId = resp.requestId;
-                    setTimeout(() => {
-                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
-                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
-                        fetch(url)
-                            .then(r => r.json())
-                            .then(d => {
-                                if (d.result) print(d.result);
-                            });
-                    }, 500);
-                }).catch(() => {
-                    print('Command failed.', 'error');
-                });
+                queryWithRetry(args[0], 'processes');
             },
             ipconfig(args) {
                 if (args.length === 0) {
@@ -1077,25 +1056,7 @@
                     print('Run "devices" to see available device IDs.', 'dim');
                     return;
                 }
-                const deviceId = args[0];
-                fetch('/api/shell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: 'ipconfig' })
-                }).then(r => r.json()).then(resp => {
-                    const requestId = resp.requestId;
-                    setTimeout(() => {
-                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
-                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
-                        fetch(url)
-                            .then(r => r.json())
-                            .then(d => {
-                                if (d.result) print(d.result);
-                            });
-                    }, 500);
-                }).catch(() => {
-                    print('Command failed.', 'error');
-                });
+                queryWithRetry(args[0], 'ipconfig');
             },
             taskkill(args) {
                 if (args.length < 2) {
@@ -1110,24 +1071,7 @@
                     print('Error: PID must be a number.', 'error');
                     return;
                 }
-                fetch('/api/shell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId, payload: `taskkill ${deviceId} ${pid}` })
-                }).then(r => r.json()).then(resp => {
-                    const requestId = resp.requestId;
-                    setTimeout(() => {
-                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
-                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
-                        fetch(url)
-                            .then(r => r.json())
-                            .then(d => {
-                                if (d.result) print(d.result);
-                            });
-                    }, 500);
-                }).catch(() => {
-                    print('Command failed.', 'error');
-                });
+                queryWithRetry(deviceId, `taskkill ${deviceId} ${pid}`);
             },
             control(args) {
                 if (args.length === 0) {
