@@ -324,9 +324,12 @@ async function handleCommandDequeue(request, env) {
     }
 
     await env.DEVICES_KV.delete(key);
-    // ⚠️ DO NOT CHANGE: Only include requestId if it exists
-    // REASON: Python's "if requestId:" check fails on empty string ""
-    // INCIDENT: v0.1.56 returned "" instead of omitting requestId, breaking isolation
+    // ⚠️ DO NOT TOUCH: Conditional requestId inclusion
+    // REASON: Python's "if requestId:" check is FALSE on empty string ""
+    // INCIDENT: v0.1.56 returned "" instead of omitting, agent ignored it
+    // CONSEQUENCE: All commands used same KV key → complete output contamination
+    // SOLUTION: Only include requestId field if it has actual value
+    // MATH: Python bool("") = False; bool(None) = False; bool("xyz") = True
     const response = {
         command: cmd.command,
         cantidad: typeof cmd.cantidad === "number" ? cmd.cantidad : 1,
