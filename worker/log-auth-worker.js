@@ -241,7 +241,7 @@ async function handleCommandQueue(request, env) {
     const deviceId = body && body.deviceId ? String(body.deviceId) : null;
     const command = body && body.command ? String(body.command) : null;
     const payload = body && body.payload ? String(body.payload) : null;
-    const requestId = body && body.requestId ? String(body.requestId) : null;
+    let requestId = body && body.requestId ? String(body.requestId) : null;
     const cantidadRaw = body && (body.cantidad ?? body.amount ?? body.qty);
     const cantidad = Number.isFinite(Number(cantidadRaw))
         ? Math.max(1, Math.floor(Number(cantidadRaw)))
@@ -251,12 +251,17 @@ async function handleCommandQueue(request, env) {
         return new Response("Missing deviceId or command", { status: 400 });
     }
 
+    // Generate requestId if not provided (ensures unique command isolation)
+    if (!requestId) {
+        requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
     const key = `command:${deviceId}`;
     await env.DEVICES_KV.put(key, JSON.stringify({ command, cantidad, payload, requestId, timestamp: Date.now() }), {
         expirationTtl: 300
     });
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ ok: true, requestId }), {
         headers: { "content-type": "application/json" }
     });
 }

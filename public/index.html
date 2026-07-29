@@ -1004,9 +1004,12 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId, payload: 'sysinfo' })
-                }).then(() => {
+                }).then(r => r.json()).then(resp => {
+                    const requestId = resp.requestId;
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
+                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
+                        fetch(url)
                             .then(r => r.json())
                             .then(d => {
                                 if (d.result) print(d.result);
@@ -1027,9 +1030,12 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId, payload: 'disk' })
-                }).then(() => {
+                }).then(r => r.json()).then(resp => {
+                    const requestId = resp.requestId;
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
+                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
+                        fetch(url)
                             .then(r => r.json())
                             .then(d => {
                                 if (d.result) print(d.result, 'dim');
@@ -1050,9 +1056,12 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId, payload: 'processes' })
-                }).then(() => {
+                }).then(r => r.json()).then(resp => {
+                    const requestId = resp.requestId;
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
+                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
+                        fetch(url)
                             .then(r => r.json())
                             .then(d => {
                                 if (d.result) print(d.result);
@@ -1073,9 +1082,12 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId, payload: 'ipconfig' })
-                }).then(() => {
+                }).then(r => r.json()).then(resp => {
+                    const requestId = resp.requestId;
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
+                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
+                        fetch(url)
                             .then(r => r.json())
                             .then(d => {
                                 if (d.result) print(d.result);
@@ -1102,9 +1114,12 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId, payload: `taskkill ${deviceId} ${pid}` })
-                }).then(() => {
+                }).then(r => r.json()).then(resp => {
+                    const requestId = resp.requestId;
                     setTimeout(() => {
-                        fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                        let url = `/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`;
+                        if (requestId) url += `&requestId=${encodeURIComponent(requestId)}`;
+                        fetch(url)
                             .then(r => r.json())
                             .then(d => {
                                 if (d.result) print(d.result);
