@@ -774,10 +774,14 @@
             // INCIDENT: User could type during waiting, causing multiple commands to queue
             hiddenInput.disabled = true;
             hiddenInput.style.opacity = '0.5';
+            // Generate unique requestId for each query execution
+            // This prevents output contamination when running same command multiple times
+            // SEPARATE from control mode requestId (which uses different format)
+            const queryRequestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deviceId, payload })
+                body: JSON.stringify({ deviceId, payload, requestId: queryRequestId })
             }).then(() => {
                 let attempt = 0;
                 function retry() {
@@ -791,7 +795,8 @@
                         hiddenInput.focus();
                         return;
                     }
-                    fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}`)
+                    // Use queryRequestId to isolate results per execution
+                    fetch(`/api/shell-result?deviceId=${encodeURIComponent(deviceId)}&requestId=${encodeURIComponent(queryRequestId)}`)
                         .then(r => r.json())
                         .then(d => {
                             if (d.result) {
