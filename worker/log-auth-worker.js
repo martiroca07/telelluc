@@ -229,16 +229,35 @@ async function handleDevices(request, env) {
 
         const slowModeRaw = await env.DEVICES_KV.get(`slow-mode:${record.id}`);
         const isSlowed = slowModeRaw ? JSON.parse(slowModeRaw).enabled : false;
-        const thresholdMs = isSlowed ? 360 * 1000 : ONLINE_GRACE_PERIOD_MS;
-        const online = ageMs < thresholdMs;
+
+        // In slow mode:
+        // - First 5 min: show "active"
+        // - After 5 min: show elapsed time but still "slowed"
+        // - After 6 min: "offline"
+        const SLOW_ACTIVE_THRESHOLD_MS = 5 * 60 * 1000;  // 5 minutes
+        const SLOW_OFFLINE_THRESHOLD_MS = 6 * 60 * 1000; // 6 minutes
+        const NORMAL_THRESHOLD_MS = ONLINE_GRACE_PERIOD_MS;
+
+        let status;
+        if (isSlowed) {
+            if (ageMs < SLOW_ACTIVE_THRESHOLD_MS) {
+                status = 'active';
+            } else if (ageMs < SLOW_OFFLINE_THRESHOLD_MS) {
+                status = 'slowed';
+            } else {
+                status = 'offline';
+            }
+        } else {
+            status = ageMs < NORMAL_THRESHOLD_MS ? 'online' : 'offline';
+        }
 
         devices.push({
             id: record.id,
             hostname: record.hostname,
             ip: record.ip,
             lastSeen: record.lastSeen,
-            online,
-            status: isSlowed ? 'slowed' : (online ? 'online' : 'offline')
+            online: ageMs < (isSlowed ? SLOW_OFFLINE_THRESHOLD_MS : NORMAL_THRESHOLD_MS),
+            status
         });
     }
     devices.sort((a, b) => a.id - b.id);
