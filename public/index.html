@@ -1007,7 +1007,8 @@
                         hostname: d.hostname,
                         status: d.status || (d.online ? 'online' : 'offline'),
                         lastSeen: d.online || d.status === 'slowed' ? 'active' : formatLastSeen(d.lastSeen),
-                        ip: d.ip
+                        ip: d.ip,
+                        mode: d.mode || 'fast'
                     }));
                     const colWidth = (key, header) =>
                         rows.reduce((max, r) => Math.max(max, r[key].length), header.length);
@@ -1016,14 +1017,17 @@
                     const hostW = colWidth('hostname', 'HOSTNAME');
                     const statusW = colWidth('status', 'STATUS');
                     const lastW = colWidth('lastSeen', 'LAST SEEN');
+                    const modeW = colWidth('mode', 'MODE');
                     print(
                         pad('ID', idW) + '  ' + pad('HOSTNAME', hostW) + '  ' +
-                        pad('STATUS', statusW) + '  ' + pad('LAST SEEN', lastW) + '  IP'
+                        pad('STATUS', statusW) + '  ' + pad('LAST SEEN', lastW) + '  ' +
+                        pad('MODE', modeW) + '  IP'
                     );
                     rows.forEach((r) => {
                         print(
                             pad(r.id, idW) + '  ' + pad(r.hostname, hostW) + '  ' +
-                            pad(r.status, statusW) + '  ' + pad(r.lastSeen, lastW) + '  ' + r.ip
+                            pad(r.status, statusW) + '  ' + pad(r.lastSeen, lastW) + '  ' +
+                            pad(r.mode, modeW) + '  ' + r.ip
                         );
                     });
                 }).catch(() => {

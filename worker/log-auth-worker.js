@@ -257,7 +257,8 @@ async function handleDevices(request, env) {
             ip: record.ip,
             lastSeen: record.lastSeen,
             online: ageMs < (isSlowed ? SLOW_OFFLINE_THRESHOLD_MS : NORMAL_THRESHOLD_MS),
-            status
+            status,
+            mode: isSlowed ? 'slow' : 'fast'
         });
     }
     devices.sort((a, b) => a.id - b.id);
